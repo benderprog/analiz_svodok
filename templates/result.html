@@ -9,44 +9,63 @@
       <div class="result-layout">
         <aside>
           <h3>События</h3>
-          <ol>
+          <ol class="event-list">
             {% for item in data.result.items %}
-              <li>Событие {{ forloop.counter }}{% if item.found %} ✓{% endif %}</li>
+              <li>
+                <button class="event-button{% if forloop.first %} active{% endif %}" data-target="event-{{ forloop.counter0 }}">
+                  {{ forloop.counter }}. {{ item.extracted.raw_text|truncatechars:80 }}
+                </button>
+                {% if item.event_found %}
+                  <span class="status status-plus">✓</span>
+                {% endif %}
+              </li>
             {% endfor %}
           </ol>
           <a class="button" href="/jobs/{{ job_id }}/clear">Очистить</a>
         </aside>
         <div class="result-details">
           {% for item in data.result.items %}
-            <article>
+            <article id="event-{{ forloop.counter0 }}" class="event-detail{% if forloop.first %} active{% endif %}">
               <h4>Событие {{ forloop.counter }}</h4>
+              <p class="event-text">{{ item.highlighted_text|safe }}</p>
               {% if item.message %}<p class="warning">{{ item.message }}</p>{% endif %}
-              <div class="attributes">
-                {% for key, attr in item.attributes.items %}
-                  {% if attr.value %}
-                    <div class="attribute">
-                      <strong>{{ key }}</strong>
-                      {% if attr.status %}
-                        {% if attr.status == "+" %}
-                          <span class="status status-plus">+</span>
-                        {% elif attr.status == "!" %}
-                          <span class="status status-warn">!</span>
-                        {% else %}
-                          <span class="status status-fail">-</span>
-                        {% endif %}
-                        {% if attr.percent is not None %}
-                          <span>{{ attr.percent }}%</span>
-                        {% endif %}
-                      {% endif %}
-                      <span class="value">{{ attr.value }}</span>
-                      {% if attr.diff %}
-                        <pre>{{ attr.diff }}</pre>
-                      {% endif %}
-                    </div>
-                  {% endif %}
-                {% endfor %}
-              </div>
-              {% if item.found %}
+              <table class="attributes-table">
+                <tbody>
+                  {% for key, attr in item.attributes.items %}
+                    {% if attr.value %}
+                      <tr>
+                        <td class="attr-name">{{ key }}</td>
+                        <td>
+                          {% if attr.status %}
+                            {% if attr.status == "+" %}
+                              <span class="status status-plus">+</span>
+                            {% elif attr.status == "!" %}
+                              <span class="status status-warn">!</span>
+                            {% else %}
+                              <span class="status status-fail">-</span>
+                            {% endif %}
+                          {% endif %}
+                          {% if attr.percent is not None %}
+                            <span class="attr-percent">{{ attr.percent }}%</span>
+                          {% endif %}
+                        </td>
+                        <td class="value">{{ attr.value }}</td>
+                      </tr>
+                    {% endif %}
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% if item.explanation %}
+                <div class="diff-block">
+                  <h5>Пояснение</h5>
+                  <ul>
+                    {% for line in item.explanation %}
+                      <li>{{ line }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+              {% if item.event_found %}
                 <div class="portal-block">
                   <h5>Найденная запись в БД</h5>
                   {% for match in item.matches %}
@@ -63,6 +82,22 @@
           {% endfor %}
         </div>
       </div>
+      <script>
+        const buttons = document.querySelectorAll('.event-button');
+        const details = document.querySelectorAll('.event-detail');
+        function selectEvent(targetId) {
+          details.forEach((detail) => detail.classList.toggle('active', detail.id === targetId));
+          buttons.forEach((button) =>
+            button.classList.toggle('active', button.dataset.target === targetId)
+          );
+        }
+        buttons.forEach((button) => {
+          button.addEventListener('click', () => selectEvent(button.dataset.target));
+        });
+        if (buttons.length) {
+          selectEvent(buttons[0].dataset.target);
+        }
+      </script>
     {% endif %}
   </section>
 {% endblock %}
