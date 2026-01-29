@@ -14,26 +14,32 @@ class SemanticMatch:
 
 
 class SubdivisionSemanticService:
+    _cached_subdivisions: list[SubdivisionRef] | None = None
+    _cached_embeddings: list[list[float]] | None = None
+
     def __init__(self, model_name: str) -> None:
         self.model = SentenceTransformer(model_name)
-        self._cache: dict[int, list[float]] = {}
-
-    def _embedding_for(self, subdivision: SubdivisionRef) -> list[float]:
-        if subdivision.id in self._cache:
-            return self._cache[subdivision.id]
-        embedding = self.model.encode(subdivision.full_name)
-        self._cache[subdivision.id] = embedding
-        return embedding
+        if self.__class__._cached_subdivisions is None:
+            self.__class__._cached_subdivisions = list(SubdivisionRef.objects.all())
+            texts = [
+                f"{subdivision.short_name} {subdivision.full_name}"
+                for subdivision in self.__class__._cached_subdivisions
+            ]
+            if texts:
+                self.__class__._cached_embeddings = self.model.encode(texts)
+            else:
+                self.__class__._cached_embeddings = []
 
     def match(self, text: str) -> SemanticMatch:
-        subdivisions = list(SubdivisionRef.objects.all())
-        if not subdivisions:
+        subdivisions = self.__class__._cached_subdivisions or []
+        embeddings = self.__class__._cached_embeddings or []
+        if not subdivisions or not embeddings:
             return SemanticMatch(subdivision=None, similarity=0.0)
         text_embedding = self.model.encode(text)
         best_match = None
         best_score = -1.0
-        for subdivision in subdivisions:
-            score = float(util.cos_sim(text_embedding, self._embedding_for(subdivision)))
+        for subdivision, embedding in zip(subdivisions, embeddings):
+            score = float(util.cos_sim(text_embedding, embedding))
             if score > best_score:
                 best_score = score
                 best_match = subdivision
