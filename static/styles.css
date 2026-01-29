@@ -47,8 +47,79 @@ button, .button {
 }
 .result-layout {
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 260px 1fr;
   gap: 2rem;
+}
+.event-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.event-button {
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.event-button.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+.event-detail {
+  display: none;
+  background: #f9fafb;
+  padding: 1rem;
+  border-radius: 8px;
+}
+.event-detail.active {
+  display: block;
+}
+.event-text {
+  background: #fff;
+  padding: 0.8rem;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+.attributes-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+.attributes-table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.5rem 0.4rem;
+}
+.attr-name {
+  font-weight: bold;
+  width: 160px;
+}
+.attr-percent {
+  margin-left: 0.5rem;
+  color: #6b7280;
+}
+.diff-block {
+  background: #fff;
+  padding: 0.8rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+.highlight {
+  padding: 0 0.2rem;
+  border-radius: 4px;
+}
+.highlight-plus {
+  background: rgba(34, 197, 94, 0.2);
+}
+.highlight-warn {
+  background: rgba(234, 179, 8, 0.2);
+}
+.highlight-fail {
+  background: rgba(239, 68, 68, 0.2);
 }
 .attribute {
   background: #fff;

@@ -1,79 +1,39 @@
 from __future__ import annotations
 
-from apps.analysis.dto import ExtractedEvent, MatchResult, PortalEvent
-from apps.analysis.services.compare import (
-    build_result,
-    evaluate_offenders,
-    evaluate_subdivision,
-    evaluate_time,
-    normalize_offenders,
-    rule_two_of_three,
-)
+from apps.analysis.dto import ExtractedEvent
+from apps.analysis.services.compare import CompareService
+from apps.analysis.services.portal_repo import PortalRepository
 from apps.analysis.services.semantic import SubdivisionSemanticService
 
 
 class MatchService:
-    def __init__(self, semantic_service: SubdivisionSemanticService) -> None:
+    def __init__(
+        self, semantic_service: SubdivisionSemanticService, portal_repo: PortalRepository
+    ) -> None:
         self.semantic_service = semantic_service
+        self.portal_repo = portal_repo
+        self.compare_service = CompareService()
 
-    def match_event(self, extracted: ExtractedEvent, portal_events: list[PortalEvent]) -> MatchResult:
+    def match_event(self, extracted: ExtractedEvent) -> dict:
         settings_values = self._settings()
         threshold = settings_values["semantic_threshold_subdivision"]
         window = settings_values["time_window_minutes"]
-        subdivision_match = self.semantic_service.match(extracted.subdivision or "")
-        extracted_subdivision = (
-            subdivision_match.subdivision.full_name if subdivision_match.subdivision else None
-        )
-        time_status = evaluate_time(extracted.timestamp, None, window, exact=False, allow_near=False)
-        offenders_status = evaluate_offenders(extracted.offenders, [])
-        subdivision_status = evaluate_subdivision(
-            extracted_subdivision, None, subdivision_match.similarity, threshold
-        )
+        if extracted.subdivision_text:
+            subdivision_match = self.semantic_service.match(extracted.subdivision_text)
+            extracted.subdivision_name = (
+                subdivision_match.subdivision.full_name
+                if subdivision_match.subdivision
+                else extracted.subdivision_text
+            )
+            extracted.subdivision_similarity = subdivision_match.similarity
+        else:
+            extracted.subdivision_name = None
+            extracted.subdivision_similarity = None
 
-        best: PortalEvent | None = None
-        best_matches: list[PortalEvent] = []
-        for event in portal_events:
-            time_exact = extracted.timestamp and event.date_detection == extracted.timestamp
-            time_match = bool(time_exact)
-            subdivision_match_flag = (
-                extracted_subdivision and event.subdivision_name == extracted_subdivision
-            )
-            offenders_match_flag = bool(
-                normalize_offenders(extracted.offenders)
-                == normalize_offenders(event.offenders)
-            )
-            if rule_two_of_three(time_match, subdivision_match_flag, offenders_match_flag):
-                best_matches.append(event)
-                if best is None:
-                    best = event
-        if best:
-            subdivision_match_flag = (
-                extracted_subdivision and best.subdivision_name == extracted_subdivision
-            )
-            offenders_match_flag = bool(
-                normalize_offenders(extracted.offenders)
-                == normalize_offenders(best.offenders)
-            )
-            allow_near_time = subdivision_match_flag and offenders_match_flag
-            time_status = evaluate_time(
-                extracted.timestamp,
-                best.date_detection,
-                window,
-                exact=bool(extracted.timestamp and best.date_detection == extracted.timestamp),
-                allow_near=allow_near_time,
-            )
-            offenders_status = evaluate_offenders(extracted.offenders, best.offenders)
-            subdivision_status = evaluate_subdivision(
-                extracted_subdivision,
-                best.subdivision_name,
-                subdivision_match.similarity,
-                threshold,
-            )
-        found = best is not None
-        result = build_result(extracted, best, time_status, subdivision_status, offenders_status, found)
-        if len(best_matches) > 1:
-            result.message = f"Найдено несколько записей: {len(best_matches)}"
-            result.matches = best_matches
+        candidates = self.portal_repo.fetch_candidates(extracted.timestamp, window)
+        result = self.compare_service.compare(extracted, candidates, threshold, window)
+        if result["duplicates_count"] > 1:
+            result["message"] = f"Найдено несколько записей: {result['duplicates_count']}"
         return result
 
     def _settings(self) -> dict[str, float]:
