@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Результат{% endblock %}
+{% block content %}
+  <section class="result">
+    <h2>Результат анализа</h2>
+    {% if not data.result %}
+      <p>Результат не найден или истёк.</p>
+    {% else %}
+      <div class="result-layout">
+        <aside>
+          <h3>События</h3>
+          <ol>
+            {% for item in data.result.items %}
+              <li>Событие {{ forloop.counter }}{% if item.found %} ✓{% endif %}</li>
+            {% endfor %}
+          </ol>
+          <a class="button" href="/jobs/{{ job_id }}/clear">Очистить</a>
+        </aside>
+        <div class="result-details">
+          {% for item in data.result.items %}
+            <article>
+              <h4>Событие {{ forloop.counter }}</h4>
+              {% if item.message %}<p class="warning">{{ item.message }}</p>{% endif %}
+              <div class="attributes">
+                {% for key, attr in item.attributes.items %}
+                  {% if attr.value %}
+                    <div class="attribute">
+                      <strong>{{ key }}</strong>
+                      {% if attr.status %}
+                        {% if attr.status == "+" %}
+                          <span class="status status-plus">+</span>
+                        {% elif attr.status == "!" %}
+                          <span class="status status-warn">!</span>
+                        {% else %}
+                          <span class="status status-fail">-</span>
+                        {% endif %}
+                        {% if attr.percent is not None %}
+                          <span>{{ attr.percent }}%</span>
+                        {% endif %}
+                      {% endif %}
+                      <span class="value">{{ attr.value }}</span>
+                      {% if attr.diff %}
+                        <pre>{{ attr.diff }}</pre>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              {% if item.found %}
+                <div class="portal-block">
+                  <h5>Найденная запись в БД</h5>
+                  {% for match in item.matches %}
+                    <div class="portal-record">
+                      <div>Запись {{ forloop.counter }}</div>
+                      <div>Время: {{ match.date_detection }}</div>
+                      <div>Подразделение: {{ match.subdivision_name }}</div>
+                      <div>Нарушители: {{ match.offenders|join:", " }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

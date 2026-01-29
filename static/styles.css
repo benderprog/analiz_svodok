@@ -1,0 +1,69 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #f7f7f7;
+  color: #222;
+}
+header {
+  background: #1f2937;
+  color: #fff;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+header a {
+  color: #fff;
+  margin-left: 1rem;
+  text-decoration: none;
+}
+main {
+  padding: 2rem;
+}
+form {
+  display: grid;
+  gap: 1rem;
+  max-width: 400px;
+}
+button, .button {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  text-decoration: none;
+  display: inline-block;
+}
+.messages {
+  list-style: none;
+  padding: 0;
+  color: #b91c1c;
+}
+.auth {
+  max-width: 400px;
+  margin: 4rem auto;
+  background: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+}
+.result-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 2rem;
+}
+.attribute {
+  background: #fff;
+  margin-bottom: 1rem;
+  padding: 0.8rem;
+  border-radius: 6px;
+}
+.status-plus { color: green; }
+.status-warn { color: #d97706; }
+.status-fail { color: #dc2626; }
+.portal-block {
+  background: #fff;
+  padding: 1rem;
+  border-radius: 6px;
+}
+.warning { color: #d97706; }
+.help { display: grid; grid-template-columns: 200px 1fr; gap: 2rem; }
+.help .active { font-weight: bold; }

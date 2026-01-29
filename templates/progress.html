@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Прогресс{% endblock %}
+{% block content %}
+  <section>
+    <h2>Прогресс обработки</h2>
+    <div id="progress">{{ data.progress }}%</div>
+    <div id="status">{{ data.status }}</div>
+    <script>
+      const jobId = "{{ job_id }}";
+      async function poll() {
+        const response = await fetch(`/jobs/${jobId}/progress?format=json`);
+        const payload = await response.json();
+        document.getElementById('progress').textContent = `${payload.progress}%`;
+        document.getElementById('status').textContent = payload.status;
+        if (payload.status === 'done') {
+          window.location.href = `/jobs/${jobId}/result`;
+          return;
+        }
+        setTimeout(poll, 2000);
+      }
+      poll();
+    </script>
+  </section>
+{% endblock %}

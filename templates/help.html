@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Справка{% endblock %}
+{% block content %}
+  <section class="help">
+    <h2>Справка</h2>
+    <aside>
+      <ul>
+        {% for page in docs_files %}
+          <li>
+            <a href="/help?page={{ page }}" {% if page == active_page %}class="active"{% endif %}>{{ page }}</a>
+          </li>
+        {% endfor %}
+      </ul>
+    </aside>
+    <article class="markdown">
+      {{ content|safe }}
+    </article>
+  </section>
+{% endblock %}
