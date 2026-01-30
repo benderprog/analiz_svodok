@@ -79,7 +79,10 @@ class ExtractService:
             candidate = date_matches[0]
         dt = self._datetime_from_fact(candidate.fact)
         has_time = self._has_time(candidate.fact)
-        return dt, has_time, candidate.text
+        timestamp_text = getattr(candidate, "text", None)
+        if timestamp_text is None:
+            _, _, timestamp_text = self._match_to_span(text, candidate)
+        return dt, has_time, timestamp_text
 
     def _extract_offenders(self, text: str) -> list[Offender]:
         date_matches = list(self.date_extractor(text))
@@ -89,16 +92,45 @@ class ExtractService:
                 continue
             birth_fact = self._nearest_birth_date(match.start, match.stop, date_matches)
             birth_date, birth_year = self._birth_date_from_fact(birth_fact.fact) if birth_fact else (None, None)
+            _, _, raw = self._match_to_span(text, match)
             offender = Offender(
                 first_name=match.fact.first,
                 middle_name=match.fact.middle,
                 last_name=match.fact.last,
                 date_of_birth=birth_date,
                 birth_year=birth_year,
-                raw=match.span.text if match.span else None,
+                raw=raw,
             )
             offenders.append(offender)
         return offenders
+
+    def _match_to_span(self, text: str, match: object) -> tuple[int, int, str]:
+        start_fn = getattr(match, "start", None)
+        end_fn = getattr(match, "end", None)
+        if callable(start_fn) and callable(end_fn):
+            start = start_fn()
+            end = end_fn()
+            return start, end, text[start:end]
+
+        if isinstance(getattr(match, "start", None), int) and isinstance(getattr(match, "stop", None), int):
+            start = match.start
+            end = match.stop
+            return start, end, text[start:end]
+
+        span_fn = getattr(match, "span", None)
+        if callable(span_fn):
+            start, end = span_fn()
+            group_fn = getattr(match, "group", None)
+            raw = group_fn(0) if callable(group_fn) else text[start:end]
+            return start, end, raw
+
+        span_attr = getattr(match, "span", None)
+        if span_attr is not None and hasattr(span_attr, "start") and hasattr(span_attr, "stop"):
+            start = span_attr.start
+            end = span_attr.stop
+            return start, end, text[start:end]
+
+        return -1, -1, str(match)
 
     def _nearest_birth_date(self, start: int, stop: int, matches) -> object | None:
         closest = None
@@ -125,10 +157,10 @@ class ExtractService:
     def _datetime_from_fact(self, fact) -> datetime | None:
         if fact is None or not getattr(fact, "year", None):
             return None
-        month = fact.month or 1
-        day = fact.day or 1
-        hour = fact.hour or 0
-        minute = fact.minute or 0
+        month = getattr(fact, "month", None) or 1
+        day = getattr(fact, "day", None) or 1
+        hour = getattr(fact, "hour", None) or 0
+        minute = getattr(fact, "minute", None) or 0
         try:
             return datetime(fact.year, month, day, hour, minute)
         except ValueError:

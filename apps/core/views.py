@@ -25,6 +25,12 @@ def login_view(request: HttpRequest) -> HttpResponse:
     return render(request, "login.html")
 
 
+def root(request: HttpRequest) -> HttpResponse:
+    if request.user.is_authenticated:
+        return redirect("upload")
+    return redirect("login")
+
+
 @login_required
 def logout_view(request: HttpRequest) -> HttpResponse:
     logout(request)
