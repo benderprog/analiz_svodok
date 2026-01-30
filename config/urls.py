@@ -5,6 +5,7 @@ from apps.core import views as core_views
 from apps.analysis import views as analysis_views
 
 urlpatterns = [
+    path("", core_views.root, name="root"),
     path("admin/", admin.site.urls),
     path("login", core_views.login_view, name="login"),
     path("logout", core_views.logout_view, name="logout"),
