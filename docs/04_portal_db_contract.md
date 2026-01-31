@@ -1,9 +1,26 @@
 # Контракт с портальной БД
 
 ## Схема (read-only)
-- `subdivision(id uuid, name varchar, fullname varchar)`
-- `events(id uuid, date_detection timestamp, find_subdivision_unit_id uuid -> subdivision.id)`
-- `offenders(event_id uuid -> events.id, first_name, middle_name, last_name, date_of_birth date)`
+
+Минимальная схема для локальной разработки создаётся командой `bootstrap_local_portal`.
+
+- `subdivision(id int, fullname varchar, is_test bool)`
+- `events(id int, date_detection timestamp, find_subdivision_unit_id int -> subdivision.id, is_test bool)`
+- `offenders(id int, event_id int -> events.id, first_name, middle_name, last_name, date_of_birth date, is_test bool)`
+
+> В боевом контуре типы идентификаторов могут отличаться (например, UUID), но используются те же
+> имена колонок (`fullname`, `date_detection`, `find_subdivision_unit_id`, `event_id`).
+
+## Что делает bootstrap_local_portal
+- Создаёт таблицы (если их ещё нет).
+- Добавляет колонку `is_test` для безопасной очистки тестовых данных.
+- Заполняет набор кейсов:
+  1) 3/3 совпало
+  2) 2/3 совпало (подразделение отличается)
+  3) время в окне ±30 минут
+  4) нарушитель отличается
+  5) не найдено
+  6) дубликаты
 
 ## Запросы
 1. Получение кандидатов по времени:
