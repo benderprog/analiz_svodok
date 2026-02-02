@@ -12,3 +12,5 @@
 ## Закрытый контур (Docker)
 Подробная инструкция по развёртыванию в закрытом контуре, обновлениям и smoke-прогону
 находится в документе [docs/CLOSED_CONTOUR_DEPLOY.md](docs/CLOSED_CONTOUR_DEPLOY.md).
+
+Коротко: для closed контура используйте `scripts/docker/make_release_bundle.sh`; тяжёлая модель не используется.

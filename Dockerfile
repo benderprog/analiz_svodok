@@ -7,10 +7,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/
 
-ARG SEMANTIC_MODEL_NAME=intfloat/multilingual-e5-large
+ARG SEMANTIC_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+ARG PREWARM_MODEL=false
 
 RUN mkdir -p /models/hf && \
-    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${SEMANTIC_MODEL_NAME}', cache_folder='/models/hf')"
+    if [ "$PREWARM_MODEL" = "true" ]; then \
+      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${SEMANTIC_MODEL_NAME}', cache_folder='/models/hf')"; \
+    else \
+      echo "Skipping semantic model prewarm (PREWARM_MODEL=$PREWARM_MODEL)"; \
+    fi
 
 ENV PYTHONUNBUFFERED=1 \
     HF_HOME=/models/hf \
