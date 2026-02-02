@@ -31,8 +31,22 @@ def offender_key(offender: Offender) -> str:
     return f"{name}|{dob}" if dob else name
 
 
+def dedupe_offenders(values: list[Offender]) -> list[Offender]:
+    seen: set[str] = set()
+    deduped: list[Offender] = []
+    for offender in values:
+        if not offender_name(offender):
+            continue
+        key = offender_key(offender)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(offender)
+    return deduped
+
+
 def normalize_offenders(values: list[Offender]) -> set[str]:
-    return {offender_key(value) for value in values if offender_name(value)}
+    return {offender_key(value) for value in dedupe_offenders(values)}
 
 
 def jaccard_similarity(a: set[str], b: set[str]) -> float:
@@ -75,8 +89,8 @@ def evaluate_time(
 
 
 def offenders_diff(extracted: list[Offender], matched: list[Offender]) -> dict[str, list[str]]:
-    extracted_keys = {offender_key(offender): offender for offender in extracted}
-    matched_keys = {offender_key(offender): offender for offender in matched}
+    extracted_keys = {offender_key(offender): offender for offender in dedupe_offenders(extracted)}
+    matched_keys = {offender_key(offender): offender for offender in dedupe_offenders(matched)}
     missing = [
         offender.display_name()
         for key, offender in matched_keys.items()
@@ -112,8 +126,10 @@ def offenders_diff(extracted: list[Offender], matched: list[Offender]) -> dict[s
 def evaluate_offenders(extracted: list[Offender], matched: list[Offender]) -> AttributeStatus:
     if not extracted:
         return AttributeStatus(label="offenders", status=None, percent=None, value="не определено")
-    extracted_set = normalize_offenders(extracted)
-    matched_set = normalize_offenders(matched)
+    extracted_deduped = dedupe_offenders(extracted)
+    matched_deduped = dedupe_offenders(matched)
+    extracted_set = normalize_offenders(extracted_deduped)
+    matched_set = normalize_offenders(matched_deduped)
     similarity = jaccard_similarity(extracted_set, matched_set)
     if similarity == 1.0:
         status = "+"
@@ -125,8 +141,8 @@ def evaluate_offenders(extracted: list[Offender], matched: list[Offender]) -> At
         label="offenders",
         status=status,
         percent=round(similarity * 100, 2),
-        value=", ".join(offender.display_name() for offender in extracted),
-        diff=offenders_diff(extracted, matched),
+        value=", ".join(offender.display_name() for offender in extracted_deduped),
+        diff=offenders_diff(extracted_deduped, matched_deduped),
     )
 
 
@@ -170,6 +186,7 @@ def build_result(
 
 
 def serialize_match(result: MatchResult) -> dict:
+    extracted_offenders = dedupe_offenders(result.extracted.offenders)
     return {
         "extracted": {
             "paragraph_index": result.extracted.paragraph_index,
@@ -178,7 +195,7 @@ def serialize_match(result: MatchResult) -> dict:
             if result.extracted.timestamp
             else None,
             "subdivision": result.extracted.subdivision_name,
-            "offenders": [offender.display_name() for offender in result.extracted.offenders],
+            "offenders": [offender.display_name() for offender in extracted_offenders],
         },
         "matches": [
             {
@@ -187,7 +204,12 @@ def serialize_match(result: MatchResult) -> dict:
                 if match.date_detection
                 else None,
                 "subdivision_name": match.subdivision_name,
-                "offenders": [offender.display_name() for offender in match.offenders],
+                "subdivision_short_name": match.subdivision_short_name,
+                "subdivision_full_name": match.subdivision_full_name,
+                "offenders": [
+                    offender.display_name()
+                    for offender in dedupe_offenders(match.offenders)
+                ],
             }
             for match in result.matches
         ],
@@ -232,11 +254,12 @@ class CompareService:
             and extracted.subdivision_similarity >= threshold
         )
         extracted_subdivision = extracted.subdivision_name if valid_subdivision else None
-        extracted_offenders = extracted.offenders
+        extracted_offenders = dedupe_offenders(extracted.offenders)
         extracted_offenders_norm = normalize_offenders(extracted_offenders)
 
         matches: list[PortalEvent] = []
         for candidate in candidates:
+            candidate_offenders = dedupe_offenders(candidate.offenders)
             time_match = (
                 extracted.timestamp_has_time
                 and extracted.timestamp
@@ -247,9 +270,10 @@ class CompareService:
                 and candidate.subdivision_name == extracted_subdivision
             )
             offenders_match = (
-                extracted_offenders_norm == normalize_offenders(candidate.offenders)
+                extracted_offenders_norm == normalize_offenders(candidate_offenders)
             )
             if rule_two_of_three(time_match, subdivision_match, offenders_match):
+                candidate.offenders = candidate_offenders
                 matches.append(candidate)
 
         found = bool(matches)
@@ -287,7 +311,7 @@ class CompareService:
             threshold,
         )
         offenders_status = evaluate_offenders(
-            extracted.offenders, primary_match.offenders if primary_match else []
+            extracted_offenders, primary_match.offenders if primary_match else []
         )
 
         highlights: list[tuple[str, str | None]] = []
@@ -295,7 +319,7 @@ class CompareService:
             highlights.append((extracted.timestamp_text, time_status.status))
         if extracted.subdivision_text:
             highlights.append((extracted.subdivision_text, subdivision_status.status))
-        for offender in extracted.offenders:
+        for offender in extracted_offenders:
             if offender.raw:
                 highlights.append((offender.raw, offenders_status.status))
         highlighted_text = highlight_text(extracted.raw_text, highlights)
@@ -333,7 +357,12 @@ class CompareService:
                 {
                     "date_detection": match.date_detection,
                     "subdivision_name": match.subdivision_name,
-                    "offenders": [offender.display_name() for offender in match.offenders],
+                    "subdivision_short_name": match.subdivision_short_name,
+                    "subdivision_full_name": match.subdivision_full_name,
+                    "offenders": [
+                        offender.display_name()
+                        for offender in dedupe_offenders(match.offenders)
+                    ],
                 }
                 for match in (matches if matches else [])
             ],
