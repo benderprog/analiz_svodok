@@ -14,6 +14,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       SEMANTIC_MODEL_CACHE_DIR: /models/hf
       SEMANTIC_MODEL_LOCAL_ONLY: "true"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     volumes:
       - hf_cache:/models/hf
       - ./fixtures:/data/fixtures:ro
@@ -50,6 +52,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       SEMANTIC_MODEL_CACHE_DIR: /models/hf
       SEMANTIC_MODEL_LOCAL_ONLY: "true"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     volumes:
       - hf_cache:/models/hf
       - ./fixtures:/data/fixtures:ro
