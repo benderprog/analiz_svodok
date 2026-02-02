@@ -31,7 +31,8 @@
 
 Дополнительно (если нужно явно переопределить):
 - `APP_ADMIN_LOGIN`, `APP_ADMIN_PASSWORD` — суперпользователь создаётся автоматически при миграциях.
-- `SEMANTIC_MODEL_NAME` — модель SentenceTransformer, запечённая в образ.
+- `SEMANTIC_MODEL_NAME` — модель SentenceTransformer, запечённая в образ. По умолчанию используется
+  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`.
 
 > В compose-файле для закрытого контура параметры подключения к `app-postgres` и Redis
 > задаются напрямую (через `service name`), поэтому `POSTGRES_HOST` и `REDIS_URL`
@@ -123,26 +124,38 @@ TXT фикстуры расположены в `fixtures/text/` (маунтят�
    ```
 
 ## Offline модель
-- Кэш модели встроен в образ на этапе сборки и находится в `/models/hf`.
+- По умолчанию используется `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`.
+- Если нужно прогреть модель при сборке, используйте `scripts/docker/build_closed.sh --prewarm`.
 - В рантайме включён офлайн-режим (`HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`).
 - Чтобы заменить модель, пересоберите образ в открытой среде с другим
   `SEMANTIC_MODEL_NAME` и передайте новый tar в закрытый контур.
 
+### Очистка кэша тяжёлой модели
+Если ранее использовалась `intfloat/multilingual-e5-large`, кэш можно удалить:
+```bash
+scripts/models/purge_heavy_model_cache.sh --yes
+```
+
 ## Release bundle (пакет для переноса)
-Скрипт `scripts/release/make_release_bundle.sh` собирает bundle:
-- образы `analiz_svodok_web` и `analiz_svodok_celery`;
+Для сборки образов закрытого контура:
+```bash
+scripts/docker/build_closed.sh
+```
+
+Скрипт `scripts/docker/make_release_bundle.sh` собирает bundle:
+- образы из `docker-compose.closed.yml`;
 - `docker-compose.closed.yml`, `.env.example`, документацию и скрипты.
 
 Пример:
 ```bash
-APP_VERSION=1.2.3 SEMANTIC_MODEL_NAME=intfloat/multilingual-e5-large \
-  ./scripts/release/make_release_bundle.sh
+APP_VERSION=1.2.3 ./scripts/docker/make_release_bundle.sh
 ```
 
 В `dist/` будут:
 - `analiz_svodok_images_<version>.tar`
 - `docker-compose.closed.yml`
 - `.env.example`
-- `CLOSED_CONTOUR_DEPLOY.md`
-- `scripts/closed/*`
+- `docs/CLOSED_CONTOUR_DEPLOY.md`
+- `scripts/closed/*` (если есть)
+- `scripts/docker/*`
 - `SHA256SUMS`
