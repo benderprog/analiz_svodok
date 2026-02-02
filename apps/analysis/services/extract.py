@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+import re
 
 from natasha import (
     DatesExtractor,
@@ -33,6 +34,25 @@ class ExtractService:
         self.tagger = NewsNERTagger(self.embedding)
         self.date_extractor = DatesExtractor(self.morph_vocab)
         self.name_extractor = NamesExtractor(self.morph_vocab)
+        self._name_pattern = re.compile(
+            r"\b[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){1,2}\b"
+        )
+        self._birth_date_pattern = re.compile(
+            r"(?P<date>\d{2}\.\d{2}\.\d{4})\s*(?:г\.?р\.?|род\.?)",
+            re.IGNORECASE,
+        )
+        self._birth_year_pattern = re.compile(
+            r"(?P<year>\d{4})\s*(?:г\.?р\.?|род\.?)",
+            re.IGNORECASE,
+        )
+        self._time_pattern = re.compile(r"\b(?:[01]?\d|2[0-3])[.:][0-5]\d\b")
+        self._date_pattern = re.compile(r"\b\d{2}\.\d{2}\.\d{4}\b")
+        self._time_then_date_pattern = re.compile(
+            rf"(?:\b[Вв]\s+)?(?P<time>{self._time_pattern.pattern})\s+(?P<date>{self._date_pattern.pattern})"
+        )
+        self._date_then_time_pattern = re.compile(
+            rf"(?P<date>{self._date_pattern.pattern})\s+(?P<time>{self._time_pattern.pattern})"
+        )
 
     def extract(self, text: str) -> ExtractedAttributes:
         doc = Doc(text)
@@ -40,7 +60,7 @@ class ExtractService:
         doc.tag_ner(self.tagger)
         offenders = self._extract_offenders(text)
         subdivision_text = self._extract_subdivision(doc)
-        timestamp, timestamp_has_time, timestamp_text = self._extract_timestamp(text, offenders)
+        timestamp, timestamp_has_time, timestamp_text = self._extract_timestamp(text)
 
         return ExtractedAttributes(
             timestamp=timestamp,
@@ -51,57 +71,46 @@ class ExtractService:
         )
 
     def _extract_subdivision(self, doc: Doc) -> str | None:
+        subdivision_text = self._extract_subdivision_from_text(doc.text)
+        if subdivision_text:
+            return subdivision_text
         for span in doc.spans:
             if span.type == "ORG":
                 return span.text
         return None
 
-    def _extract_timestamp(
-        self, text: str, offenders: list[Offender]
-    ) -> tuple[datetime | None, bool, str | None]:
-        date_matches = list(self.date_extractor(text))
-        if not date_matches:
-            return None, False, None
+    def _extract_timestamp(self, text: str) -> tuple[datetime | None, bool, str | None]:
+        candidates = self._extract_datetime_candidates(text)
+        if candidates:
+            candidate = candidates[0]
+            return candidate["timestamp"], True, candidate["raw"]
 
-        offender_spans: set[tuple[int, int]] = {
-            (span.start, span.stop)
-            for span in self.name_extractor(text)
-            if span.fact
-        }
-        candidate = None
-        for match in date_matches:
-            if any(self._overlaps(match.start, match.stop, span) for span in offender_spans):
-                continue
-            candidate = match
-            if self._has_time(match.fact):
-                break
-        if candidate is None:
-            candidate = date_matches[0]
-        dt = self._datetime_from_fact(candidate.fact)
-        has_time = self._has_time(candidate.fact)
-        timestamp_text = getattr(candidate, "text", None)
-        if timestamp_text is None:
-            _, _, timestamp_text = self._match_to_span(text, candidate)
-        return dt, has_time, timestamp_text
+        date_only = self._extract_date_only(text)
+        if date_only:
+            return date_only["timestamp"], False, date_only["raw"]
+
+        return None, False, None
 
     def _extract_offenders(self, text: str) -> list[Offender]:
-        date_matches = list(self.date_extractor(text))
         offenders: list[Offender] = []
-        for match in self.name_extractor(text):
-            if not match.fact:
+        for match in self._name_pattern.finditer(text):
+            raw = match.group(0)
+            parts = raw.split()
+            if len(parts) not in (2, 3):
                 continue
-            birth_fact = self._nearest_birth_date(match.start, match.stop, date_matches)
-            birth_date, birth_year = self._birth_date_from_fact(birth_fact.fact) if birth_fact else (None, None)
-            _, _, raw = self._match_to_span(text, match)
-            offender = Offender(
-                first_name=match.fact.first,
-                middle_name=match.fact.middle,
-                last_name=match.fact.last,
-                date_of_birth=birth_date,
-                birth_year=birth_year,
-                raw=raw,
+            last_name, first_name = parts[0], parts[1]
+            middle_name = parts[2] if len(parts) == 3 else None
+            birth_date, birth_year = self._extract_birth_date(text, match.start(), match.end())
+            offenders.append(
+                Offender(
+                    first_name=first_name,
+                    middle_name=middle_name,
+                    last_name=last_name,
+                    date_of_birth=birth_date,
+                    birth_year=birth_year,
+                    raw=raw,
+                )
             )
-            offenders.append(offender)
         return offenders
 
     def _match_to_span(self, text: str, match: object) -> tuple[int, int, str]:
@@ -171,3 +180,67 @@ class ExtractService:
 
     def _overlaps(self, start: int, stop: int, span: tuple[int, int]) -> bool:
         return not (stop <= span[0] or start >= span[1])
+
+    def _extract_subdivision_from_text(self, text: str) -> str | None:
+        phrase_match = re.search(r"\bподразделени[ея]\s+([^,.;\n]+)", text, re.IGNORECASE)
+        if phrase_match:
+            candidate = phrase_match.group(1).strip()
+            token_match = re.search(r"\b[А-ЯЁ]{1,5}-[A-Za-zА-ЯЁа-яё0-9-]+\b", candidate)
+            return token_match.group(0) if token_match else candidate
+        token_match = re.search(r"\b[А-ЯЁ]{1,5}-[A-Za-zА-ЯЁа-яё0-9-]+\b", text)
+        return token_match.group(0) if token_match else None
+
+    def _extract_birth_date(self, text: str, start: int, end: int) -> tuple[date | None, int | None]:
+        window_start = max(0, start - 40)
+        window_end = min(len(text), end + 40)
+        window = text[window_start:window_end]
+        date_match = self._birth_date_pattern.search(window)
+        if date_match:
+            try:
+                parsed = datetime.strptime(date_match.group("date"), "%d.%m.%Y").date()
+            except ValueError:
+                parsed = None
+            return parsed, None
+        year_match = self._birth_year_pattern.search(window)
+        if year_match:
+            return None, int(year_match.group("year"))
+        return None, None
+
+    def _extract_datetime_candidates(self, text: str) -> list[dict[str, object]]:
+        candidates: list[dict[str, object]] = []
+        for pattern in (self._time_then_date_pattern, self._date_then_time_pattern):
+            for match in pattern.finditer(text):
+                date_text = match.group("date")
+                if self._is_birth_context(text, match.start("date"), match.end("date")):
+                    continue
+                time_text = match.group("time").replace(".", ":")
+                try:
+                    timestamp = datetime.strptime(f"{date_text} {time_text}", "%d.%m.%Y %H:%M")
+                except ValueError:
+                    continue
+                candidates.append(
+                    {
+                        "start": match.start(),
+                        "timestamp": timestamp,
+                        "raw": match.group(0),
+                    }
+                )
+        candidates.sort(key=lambda item: item["start"])
+        return candidates
+
+    def _extract_date_only(self, text: str) -> dict[str, object] | None:
+        for match in self._date_pattern.finditer(text):
+            if self._is_birth_context(text, match.start(), match.end()):
+                continue
+            try:
+                timestamp = datetime.strptime(match.group(0), "%d.%m.%Y")
+            except ValueError:
+                continue
+            return {"timestamp": timestamp, "raw": match.group(0)}
+        return None
+
+    def _is_birth_context(self, text: str, start: int, end: int) -> bool:
+        window_start = max(0, start - 10)
+        window_end = min(len(text), end + 10)
+        window = text[window_start:window_end]
+        return bool(re.search(r"(г\.?р\.?|род\.?)", window, re.IGNORECASE))
