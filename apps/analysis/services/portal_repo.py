@@ -42,6 +42,8 @@ class PortalRepository:
                     event_id=str(event_id),
                     date_detection=date_detection,
                     subdivision_name=fullname,
+                    subdivision_short_name=fullname,
+                    subdivision_full_name=fullname,
                     offenders=[],
                 )
         if not events:

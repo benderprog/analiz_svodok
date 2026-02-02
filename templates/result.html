@@ -72,7 +72,11 @@
                     <div class="portal-record">
                       <div>Запись {{ forloop.counter }}</div>
                       <div>Время: {{ match.date_detection }}</div>
-                      <div>Подразделение: {{ match.subdivision_name }}</div>
+                      <div>
+                        Подразделение:
+                        {{ match.subdivision_short_name|default:match.subdivision_name }}
+                        ({{ match.subdivision_full_name|default:match.subdivision_name }})
+                      </div>
                       <div>Нарушители: {{ match.offenders|join:", " }}</div>
                     </div>
                   {% endfor %}

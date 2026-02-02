@@ -42,6 +42,8 @@ class PortalEvent:
     event_id: str
     date_detection: datetime | None
     subdivision_name: str | None
+    subdivision_short_name: str | None
+    subdivision_full_name: str | None
     offenders: list[Offender]
 
 
