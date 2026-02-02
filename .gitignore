@@ -1,0 +1,6 @@
+artifacts/
+dist/
+*.tar
+*.tgz
+*.zip
+fixtures/**/*.docx
