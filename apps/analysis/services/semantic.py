@@ -15,7 +15,7 @@ class SemanticMatch:
 
 class SubdivisionSemanticService:
     _cached_subdivisions: list[SubdivisionRef] | None = None
-    _cached_embeddings: list[list[float]] | None = None
+    _cached_embeddings: object | None = None
 
     def __init__(self, model_name: str) -> None:
         self.model = SentenceTransformer(model_name)
@@ -31,9 +31,11 @@ class SubdivisionSemanticService:
                 self.__class__._cached_embeddings = []
 
     def match(self, text: str) -> SemanticMatch:
-        subdivisions = self.__class__._cached_subdivisions or []
-        embeddings = self.__class__._cached_embeddings or []
-        if not subdivisions or not embeddings:
+        cached_subdivisions = self.__class__._cached_subdivisions
+        cached_embeddings = self.__class__._cached_embeddings
+        subdivisions = cached_subdivisions if cached_subdivisions is not None else []
+        embeddings = cached_embeddings if cached_embeddings is not None else []
+        if not subdivisions or len(embeddings) == 0:
             return SemanticMatch(subdivision=None, similarity=0.0)
         text_embedding = self.model.encode(text)
         best_match = None
