@@ -4,6 +4,7 @@ import pytest
 
 from apps.analysis.services.compare import (
     CompareService,
+    dedupe_offenders,
     evaluate_time,
     jaccard_similarity,
     normalize_name,
@@ -80,6 +81,8 @@ def test_compare_offenders_diff_and_status():
         event_id="1",
         date_detection=datetime(2024, 1, 1, 12, 0),
         subdivision_name="Отдел А",
+        subdivision_short_name="Отдел А",
+        subdivision_full_name="Отдел А",
         offenders=[
             Offender(
                 first_name="Иван", middle_name=None, last_name="Иванов", date_of_birth=date(1992, 1, 1)
@@ -91,3 +94,30 @@ def test_compare_offenders_diff_and_status():
     offenders_status = result["attributes"]["offenders"]
     assert offenders_status["status"] == "!"
     assert "Несовпадения" in " ".join(result["explanation"])
+
+
+def test_dedupe_offenders_in_output():
+    duplicate = Offender(first_name="Иван", middle_name=None, last_name="Иванов", birth_year=1991)
+    extracted_event = ExtractedEvent(
+        paragraph_index=0,
+        raw_text="Текст",
+        timestamp=datetime(2024, 1, 1, 12, 0),
+        timestamp_has_time=True,
+        timestamp_text="01.01.2024 12:00",
+        subdivision_text="Отдел А",
+        subdivision_name="Отдел А",
+        subdivision_similarity=0.9,
+        offenders=[duplicate, duplicate],
+    )
+    portal_event = PortalEvent(
+        event_id="1",
+        date_detection=datetime(2024, 1, 1, 12, 0),
+        subdivision_name="Отдел А",
+        subdivision_short_name="Отдел А",
+        subdivision_full_name="Отдел А",
+        offenders=[duplicate],
+    )
+    assert len(dedupe_offenders(extracted_event.offenders)) == 1
+    result = CompareService().compare(extracted_event, [portal_event], 0.8, 30)
+    offenders_status = result["attributes"]["offenders"]
+    assert offenders_status["value"].count("Иванов") == 1
