@@ -57,8 +57,18 @@ def jaccard_similarity(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
-def time_window_percent(delta_minutes: float, window_minutes: int) -> float:
-    return max(0.0, 100 - (abs(delta_minutes) / window_minutes) * 100)
+def format_delta_minutes(delta_minutes: int) -> str:
+    if delta_minutes == 0:
+        return "0 мин"
+    sign = "+" if delta_minutes > 0 else "-"
+    minutes = abs(delta_minutes)
+    hours = minutes // 60
+    remainder = minutes % 60
+    if hours and remainder:
+        return f"{sign}{hours} ч {remainder} мин"
+    if hours:
+        return f"{sign}{hours} ч"
+    return f"{sign}{remainder} мин"
 
 
 def evaluate_time(
@@ -74,18 +84,31 @@ def evaluate_time(
         return AttributeStatus(
             label="timestamp",
             status="!",
-            percent=0.0,
+            percent=None,
             value=f"{value} (время отсутствует)",
         )
     if candidate is None:
-        return AttributeStatus(label="timestamp", status="-", percent=0.0, value=value)
+        return AttributeStatus(label="timestamp", status="-", percent=None, value=value)
     if extracted == candidate:
-        return AttributeStatus(label="timestamp", status="+", percent=100.0, value=value)
-    delta = (candidate - extracted).total_seconds() / 60
-    if abs(delta) <= window_minutes:
-        percent = time_window_percent(delta, window_minutes)
-        return AttributeStatus(label="timestamp", status="!", percent=percent, value=value)
-    return AttributeStatus(label="timestamp", status="-", percent=0.0, value=value)
+        return AttributeStatus(
+            label="timestamp",
+            status="+",
+            percent=None,
+            value=value,
+            timestamp_delta_minutes=0,
+            timestamp_delta_human="0 мин",
+        )
+    delta_minutes = int(round((extracted - candidate).total_seconds() / 60))
+    if abs(delta_minutes) <= window_minutes:
+        return AttributeStatus(
+            label="timestamp",
+            status="!",
+            percent=None,
+            value=value,
+            timestamp_delta_minutes=delta_minutes,
+            timestamp_delta_human=format_delta_minutes(delta_minutes),
+        )
+    return AttributeStatus(label="timestamp", status="-", percent=None, value=value)
 
 
 def offenders_diff(extracted: list[Offender], matched: list[Offender]) -> dict[str, list[str]]:

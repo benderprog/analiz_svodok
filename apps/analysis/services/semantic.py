@@ -19,6 +19,7 @@ class SubdivisionSemanticService:
     _cached_subdivisions: list[SubdivisionRef] | None = None
     _cached_embeddings: object | None = None
     _cached_embedding_entries: list[SubdivisionRef] | None = None
+    _cached_normalized_entries: list[tuple[str, SubdivisionRef]] | None = None
 
     def __init__(self, model_name: str) -> None:
         self.model = SentenceTransformer(model_name)
@@ -39,61 +40,92 @@ class SubdivisionSemanticService:
             else:
                 self.__class__._cached_embeddings = []
                 self.__class__._cached_embedding_entries = []
+            normalized_entries: list[tuple[str, SubdivisionRef]] = []
+            for subdivision in self.__class__._cached_subdivisions:
+                candidates = [subdivision.short_name, subdivision.full_name]
+                candidates.extend(self._generate_aliases(subdivision.full_name))
+                for candidate in candidates:
+                    normalized = self._normalize(candidate)
+                    if normalized:
+                        normalized_entries.append((normalized, subdivision))
+            self.__class__._cached_normalized_entries = normalized_entries
 
     @staticmethod
-    def _normalize(value: str) -> str:
+    def _pre_normalize(value: str) -> str:
         lowered = value.lower().replace("ё", "е")
         lowered = re.sub(r"[‐‑‒–—―−]", "-", lowered)
+        cleaned = re.sub(r"[\"'«»()\\[\\]{}]", "", lowered)
+        cleaned = cleaned.replace(".", "")
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        return cleaned.strip()
+
+    @classmethod
+    def _normalize(cls, value: str | None) -> str:
+        if not value:
+            return ""
+        cleaned = cls._pre_normalize(value)
+        cleaned = cleaned.replace(" ", "")
+        cleaned = cleaned.replace("-", "")
         punctuation = string.punctuation.replace("-", "")
-        cleaned = lowered.translate(str.maketrans("", "", punctuation))
-        cleaned = re.sub(r"\s+", "", cleaned)
+        cleaned = cleaned.translate(str.maketrans("", "", punctuation))
         cleaned = re.sub(r"[^\w-]", "", cleaned)
         return cleaned.strip("-")
 
-    @staticmethod
-    def _pz_pattern(value: str) -> tuple[str | None, str | None]:
-        short_match = re.match(r"^пз-?(\d+)$", value)
-        if short_match:
-            return short_match.group(1), "short"
-        full_match = re.match(r"^пограничнаязастава(\d+)$", value)
-        if full_match:
-            return full_match.group(1), "full"
-        return None, None
+    @classmethod
+    def _generate_aliases(cls, full_name: str | None) -> list[str]:
+        if not full_name:
+            return []
+        normalized = cls._pre_normalize(full_name)
+        aliases: list[str] = []
+        pz_match = re.search(
+            r"пограничная\s+застава\s*№?\s*(\d+)", normalized, re.IGNORECASE
+        )
+        if pz_match:
+            number = pz_match.group(1)
+            aliases.extend(
+                [
+                    f"пз-{number}",
+                    f"пз {number}",
+                    f"пз№{number}",
+                    f"пз №{number}",
+                    f"пз{number}",
+                    f"пз- {number}",
+                    f"погран застава №{number}",
+                ]
+            )
+        opk_match = re.search(
+            r"отделение\s+пограничного\s+контроля\s+(.+)",
+            normalized,
+            re.IGNORECASE,
+        )
+        if opk_match:
+            name_part = opk_match.group(1).strip()
+            aliases.extend(
+                [
+                    f"оп-{name_part}",
+                    f"оп {name_part}",
+                    f"опк {name_part}",
+                    f"опк «{name_part}»",
+                    f"отделение пограничного контроля {name_part}",
+                ]
+            )
+        return aliases
 
     def match(self, text: str) -> SemanticMatch:
         cached_subdivisions = self.__class__._cached_subdivisions
         cached_embeddings = self.__class__._cached_embeddings
         cached_entries = self.__class__._cached_embedding_entries
+        normalized_entries = self.__class__._cached_normalized_entries
         subdivisions = cached_subdivisions if cached_subdivisions is not None else []
         embeddings = cached_embeddings if cached_embeddings is not None else []
         entries = cached_entries if cached_entries is not None else []
+        normalized_entries = normalized_entries if normalized_entries is not None else []
         if not subdivisions:
             return SemanticMatch(subdivision=None, similarity=0.0)
         normalized_text = self._normalize(text)
-        for subdivision in subdivisions:
-            if normalized_text == self._normalize(subdivision.short_name):
+        for normalized_candidate, subdivision in normalized_entries:
+            if normalized_text == normalized_candidate:
                 return SemanticMatch(subdivision=subdivision, similarity=1.0)
-            if normalized_text == self._normalize(subdivision.full_name):
-                return SemanticMatch(subdivision=subdivision, similarity=1.0)
-        extracted_number, extracted_form = self._pz_pattern(normalized_text)
-        if extracted_number:
-            for subdivision in subdivisions:
-                short_number, short_form = self._pz_pattern(
-                    self._normalize(subdivision.short_name)
-                )
-                full_number, full_form = self._pz_pattern(
-                    self._normalize(subdivision.full_name)
-                )
-                if (
-                    short_number == extracted_number
-                    and extracted_form != short_form
-                    and short_number is not None
-                ) or (
-                    full_number == extracted_number
-                    and extracted_form != full_form
-                    and full_number is not None
-                ):
-                    return SemanticMatch(subdivision=subdivision, similarity=0.99)
         if len(embeddings) == 0:
             return SemanticMatch(subdivision=None, similarity=0.0)
         text_embedding = self.model.encode(text)
