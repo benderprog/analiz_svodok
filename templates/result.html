@@ -45,7 +45,11 @@
                               <span class="status status-fail">-</span>
                             {% endif %}
                           {% endif %}
-                          {% if attr.percent is not None %}
+                          {% if key == "timestamp" %}
+                            {% if attr.timestamp_delta_human %}
+                              <span class="attr-percent">Δ {{ attr.timestamp_delta_human }}</span>
+                            {% endif %}
+                          {% elif attr.percent is not None %}
                             <span class="attr-percent">{{ attr.percent }}%</span>
                           {% endif %}
                         </td>

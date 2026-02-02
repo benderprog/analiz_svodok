@@ -54,6 +54,8 @@ class AttributeStatus:
     percent: float | None
     value: str | None
     diff: dict[str, Any] | None = None
+    timestamp_delta_minutes: int | None = None
+    timestamp_delta_human: str | None = None
 
 
 @dataclass

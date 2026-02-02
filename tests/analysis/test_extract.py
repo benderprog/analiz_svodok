@@ -50,3 +50,19 @@ def test_extract_event_datetime_subdivision_offenders():
         word not in (offender.raw or "")
         for word in ("В", "при", "по")
     )
+
+
+def test_extract_multiple_offenders_birth_dates():
+    service = ExtractService()
+    text = (
+        "К ответственности привлечены Иванов Иван Иванович, 10.05.1991 г.р., "
+        "Петров Петр Петрович (05.05.1996), и Сидоров Сидор Сидорович, 1990 г.р."
+    )
+
+    result = service.extract(text)
+
+    assert len(result.offenders) == 3
+    assert result.offenders[0].date_of_birth == datetime(1991, 5, 10).date()
+    assert result.offenders[1].date_of_birth == datetime(1996, 5, 5).date()
+    assert result.offenders[2].date_of_birth is None
+    assert result.offenders[2].birth_year == 1990
