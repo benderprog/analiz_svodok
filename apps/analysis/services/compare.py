@@ -3,8 +3,22 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime
 import html
+import os
 
 from apps.analysis.dto import AttributeStatus, ExtractedEvent, MatchResult, Offender, PortalEvent
+from apps.analysis.services.semantic import normalize_subdivision
+
+
+def _is_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _show_debug_extract() -> bool:
+    return _is_truthy(os.environ.get("DEBUG")) or _is_truthy(
+        os.environ.get("SHOW_DEBUG_EXTRACT")
+    )
 
 
 def normalize_name(value: str) -> str:
@@ -354,6 +368,11 @@ class CompareService:
             and extracted.subdivision_similarity < threshold
         ):
             explanation.append("Подразделение не удалось определить (ниже порога)")
+        if _show_debug_extract() and extracted.subdivision_text:
+            explanation.append(f"subdivision_raw: {extracted.subdivision_text}")
+            explanation.append(
+                f"subdivision_norm: {normalize_subdivision(extracted.subdivision_text)}"
+            )
         if offenders_status.diff:
             diff = offenders_status.diff
             if diff.get("missing"):

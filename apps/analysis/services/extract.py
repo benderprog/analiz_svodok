@@ -75,7 +75,7 @@ class ExtractService:
         )
 
     def _extract_subdivision(self, doc: Doc) -> str | None:
-        subdivision_text = self._extract_subdivision_from_text(doc.text)
+        subdivision_text = self._extract_subdivision_text(doc.text)
         if subdivision_text:
             return subdivision_text
         for span in doc.spans:
@@ -197,14 +197,38 @@ class ExtractService:
     def _overlaps(self, start: int, stop: int, span: tuple[int, int]) -> bool:
         return not (stop <= span[0] or start >= span[1])
 
-    def _extract_subdivision_from_text(self, text: str) -> str | None:
-        phrase_match = re.search(r"\bподразделени[ея]\s+([^,.;\n]+)", text, re.IGNORECASE)
-        if phrase_match:
-            candidate = phrase_match.group(1).strip()
-            token_match = re.search(r"\b[А-ЯЁ]{1,5}-[A-Za-zА-ЯЁа-яё0-9-]+\b", candidate)
-            return token_match.group(0) if token_match else candidate
-        token_match = re.search(r"\b[А-ЯЁ]{1,5}-[A-Za-zА-ЯЁа-яё0-9-]+\b", text)
-        return token_match.group(0) if token_match else None
+    def _extract_subdivision_text(self, text: str) -> str | None:
+        marker_groups: list[list[str]] = [
+            [r"\bслужбой\b"],
+            [r"\bна посту\b"],
+            [r"\bна участке\b"],
+            [r"\bподразделени[ея]\b"],
+            [r"\bпограничная\s+застава\b", r"\bпз\b"],
+            [
+                r"\bотделени[ея]\s+пограничного\s+контроля\b",
+                r"\bпограничного\s+контроля\b",
+                r"\bопк\b",
+                r"\bоп\b",
+            ],
+        ]
+        window_length = 160
+        for patterns in marker_groups:
+            best_match = None
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match and (best_match is None or match.start() < best_match.start()):
+                    best_match = match
+            if best_match:
+                window_end = min(len(text), best_match.end() + window_length)
+                window = text[best_match.end():window_end]
+                cutoff_match = re.search(r"[.;\n]", window)
+                if cutoff_match:
+                    window = window[:cutoff_match.start()]
+                candidate = window.strip(" ,:\t")
+                if candidate:
+                    return candidate
+        fallback = text[:200].strip(" ,:\t\n")
+        return fallback or None
 
     def _extract_birth_date_matches(self, text: str) -> list[dict[str, object]]:
         matches: list[dict[str, object]] = []
