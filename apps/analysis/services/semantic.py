@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
+import os
 import re
 import string
 
 from sentence_transformers import SentenceTransformer, util
 
 from apps.reference.models import SubdivisionRef
+
+logger = logging.getLogger(__name__)
+
+
+def _is_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass
@@ -22,12 +32,36 @@ class SubdivisionSemanticService:
     _cached_normalized_entries: list[tuple[str, SubdivisionRef]] | None = None
 
     def __init__(self, model_name: str) -> None:
-        self.model = SentenceTransformer(model_name)
+        cache_dir = os.environ.get("SEMANTIC_MODEL_CACHE_DIR")
+        local_only = _is_truthy(os.environ.get("SEMANTIC_MODEL_LOCAL_ONLY"))
+        init_kwargs: dict[str, object] = {}
+        if cache_dir:
+            init_kwargs["cache_folder"] = cache_dir
+        if local_only:
+            init_kwargs["local_files_only"] = True
+        try:
+            self.model = SentenceTransformer(model_name, **init_kwargs)
+        except OSError as exc:
+            if local_only:
+                message = (
+                    f"Semantic model '{model_name}' is not downloaded locally. "
+                    "Disable SEMANTIC_MODEL_LOCAL_ONLY or pre-download the model."
+                )
+                logger.error(message)
+                raise ValueError(message) from exc
+            raise
         if self.__class__._cached_subdivisions is None:
             self.__class__._cached_subdivisions = list(SubdivisionRef.objects.all())
+
+        cached_subdivisions = self.__class__._cached_subdivisions
+
+        if (
+            self.__class__._cached_embeddings is None
+            or self.__class__._cached_embedding_entries is None
+        ):
             texts: list[str] = []
             entries: list[SubdivisionRef] = []
-            for subdivision in self.__class__._cached_subdivisions:
+            for subdivision in cached_subdivisions:
                 if subdivision.short_name:
                     texts.append(subdivision.short_name)
                     entries.append(subdivision)
@@ -40,8 +74,22 @@ class SubdivisionSemanticService:
             else:
                 self.__class__._cached_embeddings = []
                 self.__class__._cached_embedding_entries = []
+
+        normalized_entries_cached = self.__class__._cached_normalized_entries
+        needs_normalized_refresh = normalized_entries_cached is None
+        if (
+            not needs_normalized_refresh
+            and cached_subdivisions
+            and normalized_entries_cached is not None
+        ):
+            needs_normalized_refresh = not all(
+                subdivision in cached_subdivisions
+                for _, subdivision in normalized_entries_cached
+            )
+
+        if needs_normalized_refresh:
             normalized_entries: list[tuple[str, SubdivisionRef]] = []
-            for subdivision in self.__class__._cached_subdivisions:
+            for subdivision in cached_subdivisions:
                 candidates = [subdivision.short_name, subdivision.full_name]
                 candidates.extend(self._generate_aliases(subdivision.full_name))
                 for candidate in candidates:

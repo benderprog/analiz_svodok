@@ -14,4 +14,5 @@ urlpatterns = [
     path("jobs/<uuid:job_id>/result", analysis_views.result_view, name="result"),
     path("jobs/<uuid:job_id>/clear", analysis_views.clear_view, name="clear"),
     path("help", core_views.help_view, name="help"),
+    path("health", core_views.health_view, name="health"),
 ]
