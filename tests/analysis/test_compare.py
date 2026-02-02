@@ -1,7 +1,5 @@
 from datetime import date, datetime, timedelta
 
-import pytest
-
 from apps.analysis.services.compare import (
     CompareService,
     dedupe_offenders,
@@ -10,7 +8,6 @@ from apps.analysis.services.compare import (
     normalize_name,
     normalize_offenders,
     rule_two_of_three,
-    time_window_percent,
 )
 from apps.analysis.dto import ExtractedEvent, Offender, PortalEvent
 
@@ -32,10 +29,6 @@ def test_jaccard_similarity():
     assert jaccard_similarity({"a", "b"}, {"b", "c"}) == 1 / 3
 
 
-def test_time_window_percent():
-    assert time_window_percent(15, 30) == 50
-
-
 def test_rule_two_of_three():
     assert rule_two_of_three(True, False, True) is True
     assert rule_two_of_three(False, False, True) is False
@@ -46,7 +39,9 @@ def test_evaluate_time_window():
     candidate = base + timedelta(minutes=10)
     result = evaluate_time(base, candidate, 30, has_time=True)
     assert result.status == "!"
-    assert result.percent == pytest.approx(66.6666667)
+    assert result.percent is None
+    assert result.timestamp_delta_minutes == -10
+    assert result.timestamp_delta_human == "-10 мин"
 
 
 def test_jaccard_offenders_diff():

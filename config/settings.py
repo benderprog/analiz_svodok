@@ -99,7 +99,7 @@ CELERY_TASK_TIME_LIMIT = 60 * 15
 DOCS_DIR = BASE_DIR / "docs"
 
 SEMANTIC_MODEL_NAME = os.environ.get(
-    "SEMANTIC_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    "SEMANTIC_MODEL_NAME", "intfloat/multilingual-e5-large"
 )
 
 APP_ADMIN_LOGIN = os.environ.get("APP_ADMIN_LOGIN", "admin")
