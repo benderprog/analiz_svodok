@@ -57,3 +57,12 @@ cp .env.example .env
 
 docker compose up --build
 ```
+
+## Healthcheck
+Эндпоинт `/health` возвращает JSON с состоянием БД, Redis и конфигурации семантической модели. В Docker он используется как readiness-проверка веб-сервиса.
+
+## Offline semantic model cache
+Для работы в закрытом контуре можно заранее скачать модель и использовать локальный кэш:
+- `SEMANTIC_MODEL_CACHE_DIR` — путь к каталогу кэша SentenceTransformer.
+- `SEMANTIC_MODEL_LOCAL_ONLY=true` — запрет сетевых обращений (модель должна быть скачана заранее).
+- Стандартные переменные Hugging Face (`HF_HOME`, `TRANSFORMERS_CACHE`, `SENTENCE_TRANSFORMERS_HOME`) также учитываются библиотекой автоматически.
