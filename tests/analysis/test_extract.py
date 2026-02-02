@@ -1,6 +1,7 @@
 import re
 
 from apps.analysis.services.extract import ExtractService
+from datetime import datetime
 
 
 def test_match_to_span_with_re_match():
@@ -23,3 +24,29 @@ def test_extract_offenders_does_not_crash():
     assert result.offenders
     offender = result.offenders[0]
     assert offender.raw is None or offender.raw in text
+
+
+def test_extract_event_datetime_subdivision_offenders():
+    service = ExtractService()
+    text = (
+        "В 10.00 31.01.2026 произошло происшествие подразделения ПЗ-1 "
+        "при участии Иванов Иван Иванович, 10.05.1991 г.р., по адресу."
+    )
+
+    result = service.extract(text)
+
+    assert result.timestamp == datetime(2026, 1, 31, 10, 0)
+    assert result.timestamp_has_time is True
+    assert result.subdivision_text is not None
+    assert "ПЗ-1" in result.subdivision_text
+    assert len(result.offenders) == 1
+    offender = result.offenders[0]
+    assert offender.last_name == "Иванов"
+    assert offender.first_name == "Иван"
+    assert offender.middle_name == "Иванович"
+    assert offender.date_of_birth == datetime(1991, 5, 10).date()
+    assert offender.birth_year is None
+    assert all(
+        word not in (offender.raw or "")
+        for word in ("В", "при", "по")
+    )
