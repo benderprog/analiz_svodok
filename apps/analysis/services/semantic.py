@@ -25,10 +25,32 @@ class SemanticMatch:
     similarity: float
 
 
+def normalize_subdivision(value: str | None) -> str:
+    if not value:
+        return ""
+    cleaned = value.lower().replace("ё", "е")
+    cleaned = cleaned.replace("№", " ")
+    cleaned = re.sub(r"[‐‑‒–—―−]", "-", cleaned)
+    cleaned = re.sub(r"[\"'«»()\\[\\]{}]", " ", cleaned)
+    cleaned = re.sub(r"[.,;:/]", " ", cleaned)
+    cleaned = re.sub(
+        r"\bотделени[ея]\s+пограничного\s+контроля\b",
+        "оп",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\bопк\b", "оп", cleaned)
+    cleaned = re.sub(r"\bпограничная\s+застава\b", "пз", cleaned)
+    cleaned = cleaned.replace("-", " ")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
+
+
 class SubdivisionSemanticService:
     _cached_subdivisions: list[SubdivisionRef] | None = None
     _cached_embeddings: object | None = None
     _cached_embedding_entries: list[SubdivisionRef] | None = None
+    _cached_embedding_texts: list[str] | None = None
     _cached_normalized_entries: list[tuple[str, SubdivisionRef]] | None = None
 
     def __init__(self, model_name: str) -> None:
@@ -58,6 +80,7 @@ class SubdivisionSemanticService:
         if (
             self.__class__._cached_embeddings is None
             or self.__class__._cached_embedding_entries is None
+            or self.__class__._cached_embedding_texts is None
         ):
             texts: list[str] = []
             entries: list[SubdivisionRef] = []
@@ -71,9 +94,11 @@ class SubdivisionSemanticService:
             if texts:
                 self.__class__._cached_embeddings = self.model.encode(texts)
                 self.__class__._cached_embedding_entries = entries
+                self.__class__._cached_embedding_texts = texts
             else:
                 self.__class__._cached_embeddings = []
                 self.__class__._cached_embedding_entries = []
+                self.__class__._cached_embedding_texts = []
 
         normalized_entries_cached = self.__class__._cached_normalized_entries
         needs_normalized_refresh = normalized_entries_cached is None
@@ -163,23 +188,51 @@ class SubdivisionSemanticService:
         cached_subdivisions = self.__class__._cached_subdivisions
         cached_embeddings = self.__class__._cached_embeddings
         cached_entries = self.__class__._cached_embedding_entries
+        cached_texts = self.__class__._cached_embedding_texts
         normalized_entries = self.__class__._cached_normalized_entries
         subdivisions = cached_subdivisions if cached_subdivisions is not None else []
         embeddings = cached_embeddings if cached_embeddings is not None else []
         entries = cached_entries if cached_entries is not None else []
+        entry_texts = cached_texts if cached_texts is not None else []
         normalized_entries = normalized_entries if normalized_entries is not None else []
         if not subdivisions:
             return SemanticMatch(subdivision=None, similarity=0.0)
         normalized_text = self._normalize(text)
+        normalized_for_numbers = normalize_subdivision(text)
+        numbers = re.findall(r"\b\d+\b", normalized_for_numbers)
         for normalized_candidate, subdivision in normalized_entries:
             if normalized_text == normalized_candidate:
                 return SemanticMatch(subdivision=subdivision, similarity=1.0)
         if len(embeddings) == 0:
             return SemanticMatch(subdivision=None, similarity=0.0)
+        filtered_entries = entries
+        filtered_embeddings = embeddings
+        filtered_texts = entry_texts
+        number_filtered = False
+        if numbers and entries and entry_texts:
+            filtered = [
+                (entry, embedding, entry_text)
+                for entry, embedding, entry_text in zip(entries, embeddings, entry_texts)
+                if all(
+                    number in normalize_subdivision(entry_text)
+                    for number in numbers
+                )
+            ]
+            if filtered:
+                filtered_entries = [item[0] for item in filtered]
+                filtered_embeddings = [item[1] for item in filtered]
+                filtered_texts = [item[2] for item in filtered]
+                number_filtered = True
+        if number_filtered:
+            logger.debug(
+                "Subdivision match filtered by numbers %s (%s candidates)",
+                numbers,
+                len(filtered_entries),
+            )
         text_embedding = self.model.encode(text)
         best_match = None
         best_score = -1.0
-        for subdivision, embedding in zip(entries, embeddings):
+        for subdivision, embedding in zip(filtered_entries, filtered_embeddings):
             score = float(util.cos_sim(text_embedding, embedding))
             if score > best_score:
                 best_score = score

@@ -66,3 +66,27 @@ def test_extract_multiple_offenders_birth_dates():
     assert result.offenders[1].date_of_birth == datetime(1996, 5, 5).date()
     assert result.offenders[2].date_of_birth is None
     assert result.offenders[2].birth_year == 1990
+
+
+def test_extract_subdivision_text_from_opk_marker():
+    service = ExtractService()
+    text = (
+        "В 09.25 сотрудниками отделения пограничного контроля Центральное "
+        "осуществлены мероприятия."
+    )
+
+    result = service.extract(text)
+
+    assert result.subdivision_text is not None
+    assert "централь" in result.subdivision_text.lower()
+
+
+def test_extract_subdivision_text_from_pz_marker():
+    service = ExtractService()
+    text = "В 10.35 на участке ПЗ №2 выявлено нарушение."
+
+    result = service.extract(text)
+
+    assert result.subdivision_text is not None
+    assert "пз" in result.subdivision_text.lower()
+    assert "2" in result.subdivision_text
