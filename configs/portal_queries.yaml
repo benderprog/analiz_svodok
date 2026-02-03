@@ -1,0 +1,18 @@
+queries:
+  find_candidates: |
+    SELECT e.id,
+           e.date_detection,
+           e.find_subdivision_unit_id
+    FROM events e
+    WHERE e.date_detection BETWEEN %(ts_from)s AND %(ts_to)s
+    ORDER BY ABS(EXTRACT(EPOCH FROM (e.date_detection - %(ts_exact)s))) ASC
+    LIMIT %(limit)s;
+  fetch_subdivision: |
+    SELECT id, fullname
+    FROM subdivision
+    WHERE id = %(id)s;
+  fetch_offenders: |
+    SELECT first_name, middle_name, last_name, date_of_birth
+    FROM offenders
+    WHERE event_id = %(event_id)s
+    ORDER BY last_name, first_name;

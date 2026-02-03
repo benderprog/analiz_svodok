@@ -50,45 +50,49 @@ export APP_VERSION="$VERSION"
 "$SCRIPT_DIR/build_closed.sh" "$PREWARM_FLAG"
 
 BUNDLE_DIR="$REPO_ROOT/dist/release_${VERSION}"
-mkdir -p "$BUNDLE_DIR"
+mkdir -p "$BUNDLE_DIR/images"
 
-IMAGES=$(docker compose -f "$REPO_ROOT/docker-compose.closed.yml" config --images | sort -u)
-if [[ -z "$IMAGES" ]]; then
-  echo "No images found in docker-compose.closed.yml" >&2
-  exit 1
-fi
+IMAGES=(
+  "analiz_svodok_web:${VERSION}"
+  "analiz_svodok_celery:${VERSION}"
+  "postgres:15-alpine"
+  "redis:7-alpine"
+)
 
-docker save $IMAGES -o "$BUNDLE_DIR/analiz_svodok_images_${VERSION}.tar"
+docker save "${IMAGES[@]}" -o "$BUNDLE_DIR/images/images_${VERSION}.tar"
 
-cp "$REPO_ROOT/docker-compose.closed.yml" "$BUNDLE_DIR/"
+cp "$REPO_ROOT/docker-compose.offline.yml" "$BUNDLE_DIR/"
 cp "$REPO_ROOT/.env.example" "$BUNDLE_DIR/"
+mkdir -p "$BUNDLE_DIR/configs"
+cp "$REPO_ROOT/configs/portal_queries.yaml" "$BUNDLE_DIR/configs/portal_queries.yaml"
 
-if [[ -f "$REPO_ROOT/docs/CLOSED_CONTOUR_DEPLOY.md" ]]; then
-  mkdir -p "$BUNDLE_DIR/docs"
-  cp "$REPO_ROOT/docs/CLOSED_CONTOUR_DEPLOY.md" "$BUNDLE_DIR/docs/"
-fi
+mkdir -p "$BUNDLE_DIR/docs"
+cp "$REPO_ROOT/docs/INSTALL_CLOSED.md" "$BUNDLE_DIR/docs/"
 
 if [[ -d "$REPO_ROOT/scripts/closed" ]]; then
   mkdir -p "$BUNDLE_DIR/scripts"
   cp -R "$REPO_ROOT/scripts/closed" "$BUNDLE_DIR/scripts/"
 fi
 
-if [[ -d "$REPO_ROOT/scripts/docker" ]]; then
-  mkdir -p "$BUNDLE_DIR/scripts"
-  cp -R "$REPO_ROOT/scripts/docker" "$BUNDLE_DIR/scripts/"
+if [[ -d "$REPO_ROOT/seed" ]]; then
+  mkdir -p "$BUNDLE_DIR/seed"
+  cp -R "$REPO_ROOT/seed"/*.sql "$BUNDLE_DIR/seed/"
+fi
+
+if [[ -d "$REPO_ROOT/fixtures" ]]; then
+  mkdir -p "$BUNDLE_DIR/fixtures"
+  cp -R "$REPO_ROOT/fixtures"/* "$BUNDLE_DIR/fixtures/"
 fi
 
 (
   cd "$BUNDLE_DIR"
   files=(
-    "analiz_svodok_images_${VERSION}.tar"
-    "docker-compose.closed.yml"
+    "images/images_${VERSION}.tar"
+    "docker-compose.offline.yml"
     ".env.example"
+    "configs/portal_queries.yaml"
+    "docs/INSTALL_CLOSED.md"
   )
-
-  if [[ -f "docs/CLOSED_CONTOUR_DEPLOY.md" ]]; then
-    files+=("docs/CLOSED_CONTOUR_DEPLOY.md")
-  fi
 
   if [[ -d scripts/closed ]]; then
     while IFS= read -r -d '' file; do
@@ -96,10 +100,16 @@ fi
     done < <(find scripts/closed -type f -print0)
   fi
 
-  if [[ -d scripts/docker ]]; then
+  if [[ -d seed ]]; then
     while IFS= read -r -d '' file; do
       files+=("${file#./}")
-    done < <(find scripts/docker -type f -print0)
+    done < <(find seed -type f -print0)
+  fi
+
+  if [[ -d fixtures ]]; then
+    while IFS= read -r -d '' file; do
+      files+=("${file#./}")
+    done < <(find fixtures -type f -print0)
   fi
 
   printf '%s\n' "${files[@]}" | sort -u | xargs -r sha256sum > SHA256SUMS

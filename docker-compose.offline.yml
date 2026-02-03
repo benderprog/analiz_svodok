@@ -1,0 +1,113 @@
+version: "3.9"
+
+services:
+  web:
+    image: analiz_svodok_web:${TAG:-local}
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      PORTAL_HOST: portal-postgres
+      PORTAL_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      SEMANTIC_MODEL_CACHE_DIR: /models/hf
+      SEMANTIC_MODEL_LOCAL_ONLY: "true"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      - hf_cache:/models/hf
+      - ./fixtures:/data/fixtures:ro
+      - ./artifacts:/data/artifacts
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      portal-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery:
+    image: analiz_svodok_celery:${TAG:-local}
+    command: celery -A config.celery worker -l info
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      PORTAL_HOST: portal-postgres
+      PORTAL_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      SEMANTIC_MODEL_CACHE_DIR: /models/hf
+      SEMANTIC_MODEL_LOCAL_ONLY: "true"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      - hf_cache:/models/hf
+      - ./fixtures:/data/fixtures:ro
+      - ./artifacts:/data/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      portal-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - app_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  portal-postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${PORTAL_DB}
+      POSTGRES_USER: ${PORTAL_USER}
+      POSTGRES_PASSWORD: ${PORTAL_PASSWORD}
+    volumes:
+      - portal_postgres_data:/var/lib/postgresql/data
+      - ./seed:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PORTAL_USER} -d ${PORTAL_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  app_postgres_data:
+  portal_postgres_data:
+  hf_cache:

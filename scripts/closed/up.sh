@@ -1,6 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.closed.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.offline.yml}"
+
+if [[ -f .env ]]; then
+  set -a
+  . .env
+  set +a
+fi
+
+TAG="${TAG:-${APP_VERSION:-local}}"
+
+required_images=(
+  "analiz_svodok_web:${TAG}"
+  "analiz_svodok_celery:${TAG}"
+)
+
+missing=0
+for image in "${required_images[@]}"; do
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    echo "Missing image: $image"
+    missing=1
+  fi
+done
+
+if [[ "$missing" -ne 0 ]]; then
+  echo "Required images are missing. Run ./scripts/closed/load_images.sh first." >&2
+  exit 1
+fi
 
 docker compose -f "$COMPOSE_FILE" up -d "$@"

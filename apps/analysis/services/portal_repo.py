@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from django.db import connections
 
 from apps.analysis.dto import Offender, PortalEvent
+from apps.analysis.services.portal_queries import get_portal_query
 
 
 class PortalRepository:
@@ -12,58 +13,81 @@ class PortalRepository:
         self, timestamp: datetime | None, window_minutes: int
     ) -> list[PortalEvent]:
         events: dict[str, PortalEvent] = {}
+        subdivision_lookup: dict[str, str | None] = {}
         with connections["portal"].cursor() as cursor:
-            if timestamp:
+            find_candidates_query = get_portal_query("find_candidates")
+            if timestamp is None:
+                ts_exact = datetime.utcnow()
+                window_start = datetime(1970, 1, 1)
+                window_end = datetime(2100, 1, 1)
+            else:
+                ts_exact = timestamp
                 window_start = timestamp - timedelta(minutes=window_minutes)
                 window_end = timestamp + timedelta(minutes=window_minutes)
-                cursor.execute(
-                    """
-                    SELECT events.id,
-                           events.date_detection,
-                           subdivision.fullname
-                    FROM events
-                    LEFT JOIN subdivision ON events.find_subdivision_unit_id = subdivision.id
-                    WHERE events.date_detection BETWEEN %s AND %s
-                    """,
-                    [window_start, window_end],
+
+            cursor.execute(
+                find_candidates_query,
+                {
+                    "ts_from": window_start,
+                    "ts_to": window_end,
+                    "ts_exact": ts_exact,
+                    "limit": 200,
+                },
+            )
+            for event_id, date_detection, subdivision_id in cursor.fetchall():
+                event_key = str(event_id)
+                subdivision_lookup[event_key] = (
+                    str(subdivision_id) if subdivision_id is not None else None
                 )
-            else:
-                cursor.execute(
-                    """
-                    SELECT events.id,
-                           events.date_detection,
-                           subdivision.fullname
-                    FROM events
-                    LEFT JOIN subdivision ON events.find_subdivision_unit_id = subdivision.id
-                    """
-                )
-            for event_id, date_detection, fullname in cursor.fetchall():
-                events[str(event_id)] = PortalEvent(
-                    event_id=str(event_id),
+                events[event_key] = PortalEvent(
+                    event_id=event_key,
                     date_detection=date_detection,
-                    subdivision_name=fullname,
-                    subdivision_short_name=fullname,
-                    subdivision_full_name=fullname,
+                    subdivision_name=None,
+                    subdivision_short_name=None,
+                    subdivision_full_name=None,
                     offenders=[],
                 )
         if not events:
             return []
-        with connections["portal"].cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT event_id, first_name, middle_name, last_name, date_of_birth
-                FROM offenders
-                WHERE event_id IN %s
-                """,
-                [tuple(events.keys())],
-            )
-            for event_id, first, middle, last, dob in cursor.fetchall():
-                events[str(event_id)].offenders.append(
-                    Offender(
-                        first_name=first,
-                        middle_name=middle,
-                        last_name=last,
-                        date_of_birth=dob,
-                    )
-                )
+        subdivisions = self._fetch_subdivisions(
+            {sid for sid in subdivision_lookup.values() if sid}
+        )
+        for event_id, subdivision_id in subdivision_lookup.items():
+            if subdivision_id and subdivision_id in subdivisions:
+                fullname = subdivisions[subdivision_id]
+                events[event_id].subdivision_name = fullname
+                events[event_id].subdivision_short_name = fullname
+                events[event_id].subdivision_full_name = fullname
+
+        for event_id in events:
+            offenders = self._fetch_offenders(event_id)
+            events[event_id].offenders.extend(offenders)
         return list(events.values())
+
+    def _fetch_subdivisions(self, subdivision_ids: set[str]) -> dict[str, str]:
+        if not subdivision_ids:
+            return {}
+        fetch_subdivision_query = get_portal_query("fetch_subdivision")
+        result: dict[str, str] = {}
+        with connections["portal"].cursor() as cursor:
+            for subdivision_id in subdivision_ids:
+                cursor.execute(fetch_subdivision_query, {"id": subdivision_id})
+                row = cursor.fetchone()
+                if row:
+                    row_id, fullname = row
+                    result[str(row_id)] = fullname
+        return result
+
+    def _fetch_offenders(self, event_id: str) -> list[Offender]:
+        fetch_offenders_query = get_portal_query("fetch_offenders")
+        with connections["portal"].cursor() as cursor:
+            cursor.execute(fetch_offenders_query, {"event_id": event_id})
+            return [
+                Offender(
+                    first_name=first,
+                    middle_name=middle,
+                    last_name=last,
+                    date_of_birth=dob,
+                )
+                for first, middle, last, dob in cursor.fetchall()
+            ]
