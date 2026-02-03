@@ -104,3 +104,7 @@ SEMANTIC_MODEL_NAME = os.environ.get(
 
 APP_ADMIN_LOGIN = os.environ.get("APP_ADMIN_LOGIN", "admin")
 APP_ADMIN_PASSWORD = os.environ.get("APP_ADMIN_PASSWORD", "admin")
+
+PORTAL_QUERY_CONFIG_PATH = os.environ.get(
+    "PORTAL_QUERY_CONFIG_PATH", "configs/portal_queries.yaml"
+)
