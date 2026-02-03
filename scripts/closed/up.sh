@@ -9,11 +9,17 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-TAG="${TAG:-${APP_VERSION:-local}}"
+TAG="${TAG:-${APP_VERSION:-}}"
+if [[ -z "${TAG:-}" ]]; then
+  echo "TAG is not set. Export TAG or add TAG=... to .env." >&2
+  exit 1
+fi
 
 required_images=(
   "analiz_svodok_web:${TAG}"
   "analiz_svodok_celery:${TAG}"
+  "postgres:15-alpine"
+  "redis:7-alpine"
 )
 
 missing=0
@@ -29,4 +35,4 @@ if [[ "$missing" -ne 0 ]]; then
   exit 1
 fi
 
-docker compose -f "$COMPOSE_FILE" up -d "$@"
+docker compose -f "$COMPOSE_FILE" up -d --pull=never "$@"

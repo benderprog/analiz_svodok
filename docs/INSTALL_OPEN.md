@@ -16,6 +16,7 @@ git pull
 TAG=$(git rev-parse --short HEAD)
 # альтернативно можно задать APP_VERSION вручную
 ```
+Дальше при проверке релиза в каталоге `release_<TAG>` тег должен быть **экспортирован** (`export TAG=...`) или записан в `.env`.
 
 ### 2) Собрать релизный бандл
 **Без прогрева модели (по умолчанию):**
@@ -71,6 +72,7 @@ cd dist/release_<TAG>
 ```bash
 cp .env.example .env
 ```
+Убедитесь, что `TAG` **экспортирован** (`export TAG=...`) или записан в `.env`.
 
 4) Подготовьте базы и данные:
 ```bash
@@ -110,4 +112,5 @@ docker compose -f docker-compose.offline.yml run --rm web \
 ## Типовые ошибки/диагностика
 - **`docker compose` пытается скачать `python:3.11-slim` или другие базовые образы** — значит где-то используется `build`. В офлайн-релизе должна быть только загрузка через `./scripts/closed/load_images.sh` и запуск `./scripts/closed/up.sh`.
 - **`Missing image: analiz_svodok_web:<TAG>`** при запуске — не загружены образы. Запустите `./scripts/closed/load_images.sh` в каталоге релиза.
+- **`Defaulting to local` или предупреждение про пустой `TAG`** — тег не задан. Выполните `export TAG=<тег релиза>` или добавьте `TAG=<тег>` в `.env` (в релизе его может автоматически добавить `./scripts/closed/load_images.sh`).
 - **`SEMANTIC_MODEL_LOCAL_ONLY` ошибки при старте** — образ собран без прогрева, а в окружении включён офлайн-режим. Пересоберите релиз с `--prewarm`.

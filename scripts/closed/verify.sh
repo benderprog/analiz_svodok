@@ -3,6 +3,18 @@ set -euo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.offline.yml}"
 
+if [[ -f .env ]]; then
+  set -a
+  . .env
+  set +a
+fi
+
+TAG="${TAG:-${APP_VERSION:-}}"
+if [[ -z "${TAG:-}" ]]; then
+  echo "TAG is not set. Export TAG or add TAG=... to .env." >&2
+  exit 1
+fi
+
 services=(postgres portal-postgres redis web)
 
 for service in "${services[@]}"; do
