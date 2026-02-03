@@ -39,7 +39,7 @@ cp .env.example .env
 ```
 
 Минимально заполните/проверьте:
-- `TAG` — тег релиза (должен совпадать с именем образов в `images_<TAG>.tar`).
+- `TAG` — тег релиза (должен совпадать с именем образов в `images_<TAG>.tar`). Тег должен быть **экспортирован** (`export TAG=...`) или записан в `.env`.
 - `POSTGRES_*` — БД приложения.
 - `PORTAL_*` — БД портала (в тестовом режиме используется контейнер `portal-postgres`).
 - `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` — Redis для Celery.
@@ -123,5 +123,6 @@ LIMIT 5;
 ## Типовые ошибки/диагностика
 - **`Missing image`** при запуске — образы не загружены. Выполните `./scripts/closed/load_images.sh`.
 - **`docker compose` пытается тянуть `postgres:15-alpine` или `redis:7-alpine`** — не загружены базовые образы из архива. Проверьте, что `images/images_<TAG>.tar` загружен полностью.
+- **`Defaulting to local` или предупреждение про пустой `TAG`** — тег не задан. Выполните `export TAG=<тег релиза>` или добавьте `TAG=<тег>` в `.env` (в релизе его может автоматически добавить `./scripts/closed/load_images.sh`).
 - **Ошибки подключения к БД портала** — проверьте `PORTAL_HOST`, `PORTAL_PORT`, `PORTAL_DB`, `PORTAL_USER`, `PORTAL_PASSWORD` в `.env`.
 - **`SEMANTIC_MODEL_LOCAL_ONLY` и ошибки модели** — релиз собран без `--prewarm`, а модель недоступна офлайн. Нужен релиз с прогревом модели.
