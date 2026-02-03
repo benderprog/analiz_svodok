@@ -110,6 +110,12 @@ docker compose -f docker-compose.offline.yml run --rm web \
 - В релизном контуре нельзя выполнять `docker build` и нельзя тянуть образы из DockerHub. Проверку релиза выполняйте **только** через `docker load` и `docker compose up`.
 
 ## Типовые ошибки/диагностика
+- **Слишком маленький build context (десятки KB) при `docker build`** — почти весь репозиторий исключён через `.dockerignore`, в образ не попадают `templates/` и `static/`. Нормальный build context для этого проекта — **десятки/сотни MB**, а не KB.
+  - Проверьте в логе сборки строку `Sending build context to Docker daemon ...`.
+  - После сборки убедитесь, что внутри образа есть каталоги:
+    ```bash
+    docker run --rm <image> ls -la /app/templates /app/static
+    ```
 - **`docker compose` пытается скачать `python:3.11-slim` или другие базовые образы** — значит где-то используется `build`. В офлайн-релизе должна быть только загрузка через `./scripts/closed/load_images.sh` и запуск `./scripts/closed/up.sh`.
 - **`Missing image: analiz_svodok_web:<TAG>`** при запуске — не загружены образы. Запустите `./scripts/closed/load_images.sh` в каталоге релиза.
 - **`Defaulting to local` или предупреждение про пустой `TAG`** — тег не задан. Выполните `export TAG=<тег релиза>` или добавьте `TAG=<тег>` в `.env` (в релизе его может автоматически добавить `./scripts/closed/load_images.sh`).

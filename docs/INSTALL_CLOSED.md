@@ -126,3 +126,8 @@ LIMIT 5;
 - **`Defaulting to local` или предупреждение про пустой `TAG`** — тег не задан. Выполните `export TAG=<тег релиза>` или добавьте `TAG=<тег>` в `.env` (в релизе его может автоматически добавить `./scripts/closed/load_images.sh`).
 - **Ошибки подключения к БД портала** — проверьте `PORTAL_HOST`, `PORTAL_PORT`, `PORTAL_DB`, `PORTAL_USER`, `PORTAL_PASSWORD` в `.env`.
 - **`SEMANTIC_MODEL_LOCAL_ONLY` и ошибки модели** — релиз собран без `--prewarm`, а модель недоступна офлайн. Нужен релиз с прогревом модели.
+- **В релизе отсутствуют стили/шаблоны** — проверьте исходную сборку образа: если build context был **десятки KB**, значит `.dockerignore` исключил почти всё. Нормальный build context — **десятки/сотни MB**.
+  - Внутри образа должны быть каталоги:
+    ```bash
+    docker run --rm <image> ls -la /app/templates /app/static
+    ```
