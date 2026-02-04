@@ -16,5 +16,5 @@ CREATE TABLE IF NOT EXISTS offenders (
     middle_name TEXT,
     last_name TEXT NOT NULL,
     date_of_birth DATE,
-    UNIQUE (event_id, first_name, middle_name, last_name, date_of_birth)
+    CONSTRAINT offenders_evt_person_dob_uk UNIQUE (event_id, first_name, middle_name, last_name, date_of_birth)
 );
