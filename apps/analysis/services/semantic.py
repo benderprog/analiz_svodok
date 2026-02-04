@@ -92,6 +92,63 @@ def normalize_subdivision(value: str | None) -> str:
     return cleaned.strip()
 
 
+def split_letter_digit(value: str) -> str:
+    if not value:
+        return ""
+    result: list[str] = []
+    prev = ""
+    for char in value:
+        if prev and ((prev.isalpha() and char.isdigit()) or (prev.isdigit() and char.isalpha())):
+            result.append(" ")
+        result.append(char)
+        prev = char
+    return "".join(result)
+
+
+def strip_edge_punct(token: str) -> str:
+    if not token:
+        return ""
+    return token.strip(".,;:()[]«»\"'")
+
+
+def generate_candidates(text: str) -> list[str]:
+    if not text:
+        return []
+    seen: set[str] = set()
+    candidates: list[str] = []
+
+    def add_candidate(value: str) -> None:
+        if value and value not in seen:
+            seen.add(value)
+            candidates.append(value)
+
+    add_candidate(text)
+    split_text = split_letter_digit(text)
+    add_candidate(split_text)
+
+    tokens = []
+    for token in split_text.split():
+        cleaned = strip_edge_punct(token)
+        if cleaned:
+            tokens.append(cleaned)
+
+    for count in range(1, 5):
+        if len(tokens) >= count:
+            add_candidate(" ".join(tokens[:count]))
+    if len(tokens) >= 8:
+        add_candidate(" ".join(tokens[:8]))
+
+    for idx in range(len(tokens) - 1):
+        letters_only = tokens[idx]
+        digits_only = tokens[idx + 1]
+        if letters_only.isalpha() and digits_only.isdigit():
+            add_candidate(f"{letters_only}-{digits_only}")
+            add_candidate(f"{letters_only} №{digits_only}")
+            add_candidate(f"{letters_only} {digits_only}")
+
+    return candidates
+
+
 class SubdivisionSemanticService:
     _cached_subdivisions: list[SubdivisionRef] | None = None
     _cached_embeddings: object | None = None
@@ -300,12 +357,26 @@ class SubdivisionSemanticService:
                 numbers,
                 len(filtered_entries),
             )
-        text_embedding = self.model.encode(text)
+        candidates = generate_candidates(text)
+        if not candidates:
+            return SemanticMatch(subdivision=None, similarity=0.0)
+        candidate_embeddings = self.model.encode(
+            candidates, normalize_embeddings=True
+        )
         best_match = None
         best_score = -1.0
-        for subdivision, embedding in zip(filtered_entries, filtered_embeddings):
-            score = float(util.cos_sim(text_embedding, embedding))
-            if score > best_score:
-                best_score = score
-                best_match = subdivision
+        best_candidate = None
+        for candidate, candidate_embedding in zip(candidates, candidate_embeddings):
+            for subdivision, embedding in zip(filtered_entries, filtered_embeddings):
+                score = float(util.cos_sim(candidate_embedding, embedding))
+                if score > best_score:
+                    best_score = score
+                    best_match = subdivision
+                    best_candidate = candidate
+        if best_candidate is not None:
+            logger.debug(
+                "Subdivision semantic best candidate '%s' with score %.4f",
+                best_candidate,
+                best_score,
+            )
         return SemanticMatch(subdivision=best_match, similarity=best_score)
