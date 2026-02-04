@@ -1,0 +1,187 @@
+pus:
+  - name: "ПУ-Центральное"
+    subdivisions:
+      - code: "PZ-2"
+        type: "ПЗ"
+        number: 2
+        locality:
+          kind: "с."
+          name: "Васильки"
+        aliases:
+          - "ПЗ-2"
+          - "ПЗ 2"
+          - "ПЗ №2"
+          - "пз-2"
+      - code: "POGZ-2"
+        type: "ПОГЗ"
+        number: 2
+        locality:
+          kind: "с."
+          name: "Васильки"
+        aliases:
+          - "ПОГЗ-2"
+          - "ПОГЗ 2"
+          - "погз №2"
+          - "Пограничная застава №2"
+          - "ПОГЗ №2 (с. Васильки)"
+          - "ПОГЗ в с. Васильки"
+          - "пограничная застава в с. Васильки"
+      - code: "OPK-CENTRAL"
+        type: "ОПК"
+        name: "Центральное"
+        locality:
+          kind: "г."
+          name: "Южный"
+        aliases:
+          - "ОПК Центральное"
+          - "ОП Центральное"
+          - "ОПК «Центральное»"
+          - "на посту ОПК Центральное"
+      - code: "OP-CENTRAL"
+        type: "ОП"
+        name: "Центральное"
+        locality:
+          kind: "г."
+          name: "Южный"
+        aliases:
+          - "ОП Центральное"
+          - "отделение пограничного контроля Центральное"
+      - code: "POGO-YUG"
+        type: "ПОГО"
+        name: "Южное"
+        locality:
+          kind: "г."
+          name: "Южный"
+        aliases:
+          - "ПОГО Южное"
+          - "пограничный отряд Южное"
+      - code: "POGK-LES"
+        type: "ПОГК"
+        name: "Лесная"
+        locality:
+          kind: "пгт"
+          name: "Лесной"
+        aliases:
+          - "ПОГК Лесная"
+          - "в районе ПОГК Лесная"
+  - name: "ПУ-Северное"
+    subdivisions:
+      - code: "POGK-NORTH"
+        type: "ПОГК"
+        name: "Северная"
+        locality:
+          kind: "пгт"
+          name: "Северный"
+        aliases:
+          - "ПОГК «Северная»"
+          - "ПОГК Северная"
+          - "в районе ПОГК Северная"
+      - code: "PZ-1"
+        type: "ПЗ"
+        number: 1
+        locality:
+          kind: "с."
+          name: "Полярное"
+        aliases:
+          - "ПЗ-1"
+          - "ПЗ 1"
+          - "ПЗ №1"
+      - code: "POGZ-1"
+        type: "ПОГЗ"
+        number: 1
+        locality:
+          kind: "с."
+          name: "Полярное"
+        aliases:
+          - "ПОГЗ-1"
+          - "ПОГЗ 1"
+          - "ПОГЗ №1"
+          - "пограничная застава №1"
+      - code: "OPK-NORTH"
+        type: "ОПК"
+        name: "Северное"
+        locality:
+          kind: "г."
+          name: "Северск"
+        aliases:
+          - "ОПК Северное"
+          - "ОП Северное"
+          - "на посту ОПК Северное"
+      - code: "OP-NORTH"
+        type: "ОП"
+        name: "Северное"
+        locality:
+          kind: "г."
+          name: "Северск"
+        aliases:
+          - "ОП Северное"
+          - "отделение пограничного контроля Северное"
+      - code: "POGO-TUNDRA"
+        type: "ПОГО"
+        name: "Тундровое"
+        locality:
+          kind: "с."
+          name: "Тундра"
+        aliases:
+          - "ПОГО Тундровое"
+          - "пограничный отряд Тундровое"
+  - name: "ПУ-Южное"
+    subdivisions:
+      - code: "PZ-3"
+        type: "ПЗ"
+        number: 3
+        locality:
+          kind: "с."
+          name: "Южные Ключи"
+        aliases:
+          - "ПЗ-3"
+          - "ПЗ 3"
+          - "ПЗ №3"
+      - code: "POGZ-3"
+        type: "ПОГЗ"
+        number: 3
+        locality:
+          kind: "с."
+          name: "Южные Ключи"
+        aliases:
+          - "ПОГЗ-3"
+          - "ПОГЗ 3"
+          - "ПОГЗ №3"
+          - "пограничная застава №3"
+      - code: "OPK-SOUTH"
+        type: "ОПК"
+        name: "Южное"
+        locality:
+          kind: "г."
+          name: "Южногорск"
+        aliases:
+          - "ОПК Южное"
+          - "ОП Южное"
+          - "на посту ОПК Южное"
+      - code: "OP-SOUTH"
+        type: "ОП"
+        name: "Южное"
+        locality:
+          kind: "г."
+          name: "Южногорск"
+        aliases:
+          - "ОП Южное"
+          - "отделение пограничного контроля Южное"
+      - code: "POGK-BEREG"
+        type: "ПОГК"
+        name: "Прибрежная"
+        locality:
+          kind: "пгт"
+          name: "Береговой"
+        aliases:
+          - "ПОГК Прибрежная"
+          - "в районе ПОГК Прибрежная"
+      - code: "POGO-STEP"
+        type: "ПОГО"
+        name: "Степное"
+        locality:
+          kind: "с."
+          name: "Степное"
+        aliases:
+          - "ПОГО Степное"
+          - "пограничный отряд Степное"

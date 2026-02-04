@@ -11,6 +11,6 @@ class PuAdmin(admin.ModelAdmin):
 
 @admin.register(SubdivisionRef)
 class SubdivisionRefAdmin(admin.ModelAdmin):
-    list_display = ("short_name", "full_name", "pu")
-    search_fields = ("short_name", "full_name")
+    list_display = ("code", "short_name", "full_name", "pu")
+    search_fields = ("code", "short_name", "full_name")
     list_filter = ("pu",)
