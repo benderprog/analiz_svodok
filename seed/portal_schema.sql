@@ -1,12 +1,14 @@
 CREATE TABLE IF NOT EXISTS subdivision (
     id INTEGER PRIMARY KEY,
-    fullname TEXT NOT NULL
+    fullname TEXT NOT NULL,
+    is_test BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY,
     date_detection TIMESTAMP NOT NULL,
-    find_subdivision_unit_id INTEGER REFERENCES subdivision(id)
+    find_subdivision_unit_id INTEGER REFERENCES subdivision(id),
+    is_test BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS offenders (
@@ -16,5 +18,6 @@ CREATE TABLE IF NOT EXISTS offenders (
     middle_name TEXT,
     last_name TEXT NOT NULL,
     date_of_birth DATE,
-    CONSTRAINT offenders_evt_person_dob_uk UNIQUE (event_id, first_name, middle_name, last_name, date_of_birth)
+    is_test BOOLEAN NOT NULL DEFAULT false,
+    CONSTRAINT uq_offenders_key UNIQUE (event_id, first_name, middle_name, last_name, date_of_birth)
 );
