@@ -198,6 +198,9 @@ class ExtractService:
         return not (stop <= span[0] or start >= span[1])
 
     def _extract_subdivision_text(self, text: str) -> str | None:
+        window = self.extract_subdivision_window(text)
+        if window:
+            return window
         marker_groups: list[list[str]] = [
             [r"\bслужбой\b"],
             [r"\bна посту\b"],
@@ -227,8 +230,27 @@ class ExtractService:
                 candidate = window.strip(" ,:\t")
                 if candidate:
                     return candidate
-        fallback = text[:200].strip(" ,:\t\n")
-        return fallback or None
+        return None
+
+    def extract_subdivision_window(self, full_text: str) -> str | None:
+        markers = ["ПОГЗ", "ПЗ", "ОПК", "ОП", "ПОГК", "ПОГО"]
+        marker_pattern = re.compile(r"\b(" + "|".join(markers) + r")\b", re.IGNORECASE)
+        match = marker_pattern.search(full_text)
+        if not match:
+            return None
+        left_window = 10
+        right_window = 80
+        start = max(0, match.start() - left_window)
+        end = min(len(full_text), match.end() + right_window)
+        window = full_text[start:end]
+        window = re.sub(r"^[\d\s:.,-]+", "", window)
+        split_pattern = re.compile(
+            r"(?:[.,;]|\bг\.?\s*р\.?\b|\bрод\.?\b|\bпаспорт\b|\bграждан\w*\b|\bвыявлен\w*\b)",
+            re.IGNORECASE,
+        )
+        parts = re.split(split_pattern, window, maxsplit=1)
+        candidate = parts[0].strip(" ,:\t\n")
+        return candidate or None
 
     def _extract_birth_date_matches(self, text: str) -> list[dict[str, object]]:
         matches: list[dict[str, object]] = []

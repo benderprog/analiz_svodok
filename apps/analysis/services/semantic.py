@@ -73,6 +73,12 @@ def normalize_subdivision(value: str | None) -> str:
     cleaned = re.sub(r"[\"'«»()\\[\\]{}]", " ", cleaned)
     cleaned = re.sub(r"[.,;:/]", " ", cleaned)
     cleaned = re.sub(
+        r"\b(службой|на участке|в районе|выявлены|выявлен|граждане|гражданин|рф|следовал|прибыл)\b",
+        " ",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
         r"\bотделени[ея]\s+пограничного\s+контроля\b",
         "оп",
         cleaned,
@@ -80,7 +86,8 @@ def normalize_subdivision(value: str | None) -> str:
     )
     cleaned = re.sub(r"\bопк\b", "оп", cleaned)
     cleaned = re.sub(r"\bпограничная\s+застава\b", "пз", cleaned)
-    cleaned = cleaned.replace("-", " ")
+    cleaned = re.sub(r"\bпз\s*-?\s*(\d+)\b", r"пз-\1", cleaned)
+    cleaned = re.sub(r"\bпогз\s*-?\s*(\d+)\b", r"погз-\1", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip()
 

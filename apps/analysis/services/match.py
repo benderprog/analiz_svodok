@@ -18,12 +18,15 @@ class MatchService:
         settings_values = self._settings()
         threshold = settings_values["semantic_threshold_subdivision"]
         window = settings_values["time_window_minutes"]
-        if extracted.subdivision_text:
-            subdivision_match = self.semantic_service.match(extracted.subdivision_text)
+        subdivision_source = extracted.subdivision_text
+        if not subdivision_source and extracted.raw_text:
+            subdivision_source = extracted.raw_text[:200].strip()
+        if subdivision_source:
+            subdivision_match = self.semantic_service.match(subdivision_source)
             extracted.subdivision_name = (
                 subdivision_match.subdivision.full_name
                 if subdivision_match.subdivision
-                else extracted.subdivision_text
+                else subdivision_source
             )
             extracted.subdivision_similarity = subdivision_match.similarity
         else:

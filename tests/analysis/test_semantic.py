@@ -77,7 +77,41 @@ def test_normalize_subdivision_keeps_number():
     normalized = semantic.normalize_subdivision("ПЗ №2")
 
     assert "2" in normalized
-    assert normalized == "пз 2"
+    assert normalized == "пз-2"
+
+
+def test_match_subdivision_with_noise_words(monkeypatch):
+    class NumberModel:
+        def encode(self, text):
+            if isinstance(text, list):
+                return np.array([[0.1], [0.9]])
+            return np.array([0.0])
+
+    monkeypatch.setattr(semantic, "SentenceTransformer", lambda _: NumberModel())
+    monkeypatch.setattr(semantic.util, "cos_sim", lambda _, embedding: float(embedding[0]))
+
+    class DummySubdivision:
+        def __init__(self, short_name: str, full_name: str) -> None:
+            self.short_name = short_name
+            self.full_name = full_name
+
+    sub_one = DummySubdivision("ПЗ-1", "Пограничная застава №1")
+    sub_two = DummySubdivision("ПЗ-2", "Пограничная застава №2")
+
+    semantic.SubdivisionSemanticService._cached_subdivisions = [sub_one, sub_two]
+    semantic.SubdivisionSemanticService._cached_embeddings = np.array([[0.1], [0.9]])
+    semantic.SubdivisionSemanticService._cached_embedding_entries = [sub_one, sub_two]
+    semantic.SubdivisionSemanticService._cached_embedding_texts = [
+        "Пограничная застава №1",
+        "Пограничная застава №2",
+    ]
+    semantic.SubdivisionSemanticService._cached_normalized_entries = []
+
+    service = semantic.SubdivisionSemanticService("dummy-model")
+    result = service.match("В 12.40 02.02.2026 службой ПЗ-2 выявлены граждане РФ ...")
+
+    assert result.subdivision is sub_two
+    assert result.similarity == 0.9
 
 
 def test_match_filters_candidates_by_number(monkeypatch):
