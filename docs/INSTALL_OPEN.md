@@ -18,24 +18,33 @@ TAG=$(git rev-parse --short HEAD)
 ```
 Дальше при проверке релиза в каталоге `release_<TAG>` тег должен быть записан в `.env`.
 
-### 2) Собрать релизный бандл
-**Без прогрева модели (по умолчанию):**
+### 2) Подготовить кэш модели и lock-файл
+Модель фиксируется в `models/model_revisions.json` и скачивается в `models/hf/` в формате HF cache.
+По умолчанию `make_release_bundle.sh` сам вызывает подготовку кэша перед сборкой релиза.
+
+Для принудительного обновления ревизии используйте:
+```bash
+REFRESH_MODEL_LOCK=1 bash scripts/models/ensure_model_cache.sh --refresh
+```
+
+### 3) Собрать релизный бандл
+**Без подготовки кэша модели (только dev):**
 ```bash
 APP_VERSION="$TAG" bash scripts/docker/make_release_bundle.sh --no-prewarm
 ```
 
-**С прогревом модели (офлайн-готовый NLP):**
+**С подготовкой кэша модели (офлайн-готовый NLP):**
 ```bash
 APP_VERSION="$TAG" bash scripts/docker/make_release_bundle.sh --prewarm
 ```
 
-### 3) Где появляется релиз
+### 4) Где появляется релиз
 Результат появится в каталоге:
 ```
 dist/release_<TAG>/
 ```
 
-### 4) Что внутри релиза
+### 5) Что внутри релиза
 Структура бандла (пример):
 ```
 release_<TAG>/
@@ -102,9 +111,10 @@ docker compose -f docker-compose.offline.yml run --rm web \
 ```
 После этого файл появится на хосте в `fixtures/test.docx`.
 
-## Прогрев модели (prewarm)
-- По умолчанию `make_release_bundle.sh` использует `--no-prewarm`.
-- `--prewarm` увеличивает размер образа, но гарантирует, что модель уже включена и **не требует интернета** в закрытом контуре.
+## Подготовка модели (model cache)
+- `scripts/models/ensure_model_cache.sh` фиксирует ревизию модели (commit sha) в `models/model_revisions.json` и скачивает файлы в `models/hf/`.
+- Docker build больше не ходит в интернет за моделью — он копирует локальный кэш `models/hf/` в образ.
+- `--prewarm` теперь является алиасом для подготовки кэша; `--no-prewarm` пропускает скачивание.
 
 **Важно**
 - В релизном контуре нельзя выполнять `docker build` и нельзя тянуть образы из DockerHub. Проверку релиза выполняйте **только** через `docker load` и `docker compose up`.
@@ -121,4 +131,4 @@ docker compose -f docker-compose.offline.yml run --rm web \
 - **`rg: command not found`** — в закрытом контуре нет ripgrep. Используйте актуальные офлайн-скрипты из релиза (они не зависят от `rg`).
 - **`unknown flag: --pull`** — используйте актуальные офлайн-скрипты без `--pull`.
 - **`Missing image :local`** — тег не задан. Добавьте `TAG=<тег>` в `.env` перед запуском офлайн-скриптов.
-- **`SEMANTIC_MODEL_LOCAL_ONLY` ошибки при старте** — образ собран без прогрева, а в окружении включён офлайн-режим. Пересоберите релиз с `--prewarm`.
+- **`SEMANTIC_MODEL_LOCAL_ONLY` ошибки при старте** — в образ не попал локальный кэш модели. Подготовьте `models/hf/` в открытом контуре и пересоберите релиз.

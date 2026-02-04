@@ -37,6 +37,9 @@ cp .env.example .env
 - `APP_ADMIN_LOGIN` / `APP_ADMIN_PASSWORD` — логин администратора.
 - `SEMANTIC_MODEL_NAME` — имя модели, зашитой в образ.
 - `PORTAL_QUERY_CONFIG_PATH` — путь к `configs/portal_queries.yaml`.
+- `SEMANTIC_MODEL_CACHE_DIR` — путь к кэшу модели (по умолчанию `/models/hf`).
+- `SEMANTIC_MODEL_LOCAL_ONLY` — принудительно использовать локальный кэш.
+- `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` — офлайн-режим Hugging Face/Transformers.
 
 ### 3) Импорт образов
 ```bash
@@ -123,6 +126,7 @@ LIMIT 5;
 **Важно**
 - В закрытом контуре запрещено использовать `docker build` и `docker pull`.
 - Запускать стек нужно **только** через `docker load` + `docker compose up` (скрипты `scripts/closed/*.sh`).
+- Образ уже содержит кэш модели в `/models/hf`, если он был подготовлен в открытом контуре.
 
 ## Типовые ошибки/диагностика
 - **`Missing image`** при запуске — образы не загружены. Выполните `./scripts/closed/load_images.sh`.
@@ -131,7 +135,7 @@ LIMIT 5;
 - **`unknown flag: --pull`** — используйте актуальные офлайн-скрипты без `--pull`.
 - **`Missing image :local`** — тег не задан. Добавьте `TAG=<тег>` в `.env` перед запуском офлайн-скриптов.
 - **Ошибки подключения к БД портала** — проверьте `PORTAL_HOST`, `PORTAL_PORT`, `PORTAL_DB`, `PORTAL_USER`, `PORTAL_PASSWORD` в `.env`.
-- **`SEMANTIC_MODEL_LOCAL_ONLY` и ошибки модели** — релиз собран без `--prewarm`, а модель недоступна офлайн. Нужен релиз с прогревом модели.
+- **`SEMANTIC_MODEL_LOCAL_ONLY` и ошибки модели** — релиз собран без подготовленного кэша модели. Нужен релиз с заполненным `models/hf/` в открытом контуре.
 - **В релизе отсутствуют стили/шаблоны** — проверьте исходную сборку образа: если build context был **десятки KB**, значит `.dockerignore` исключил почти всё. Нормальный build context — **десятки/сотни MB**.
   - Внутри образа должны быть каталоги:
     ```bash

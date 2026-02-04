@@ -5,14 +5,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 PREWARM_FLAG="--no-prewarm"
+ENSURE_MODEL_CACHE="true"
 
 usage() {
   cat <<'USAGE'
-Usage: make_release_bundle.sh [--prewarm|--no-prewarm]
+Usage: make_release_bundle.sh [--prewarm|--no-prewarm] [--skip-model-cache]
 
 Options:
-  --prewarm     Prewarm the semantic model during build
-  --no-prewarm  Do not prewarm the semantic model (default)
+  --prewarm          Ensure the semantic model cache before build
+  --no-prewarm       Do not download the semantic model cache
+  --skip-model-cache Skip model cache preparation (alias for --no-prewarm)
 USAGE
 }
 
@@ -20,9 +22,14 @@ for arg in "$@"; do
   case "$arg" in
     --prewarm)
       PREWARM_FLAG="--prewarm"
+      ENSURE_MODEL_CACHE="true"
       ;;
     --no-prewarm)
       PREWARM_FLAG="--no-prewarm"
+      ENSURE_MODEL_CACHE="false"
+      ;;
+    --skip-model-cache)
+      ENSURE_MODEL_CACHE="false"
       ;;
     -h|--help)
       usage
@@ -46,6 +53,10 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 export APP_VERSION="$VERSION"
+
+if [[ "$ENSURE_MODEL_CACHE" == "true" ]]; then
+  "$REPO_ROOT/scripts/models/ensure_model_cache.sh"
+fi
 
 "$SCRIPT_DIR/build_closed.sh" "$PREWARM_FLAG"
 
