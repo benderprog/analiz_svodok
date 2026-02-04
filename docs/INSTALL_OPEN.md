@@ -19,12 +19,12 @@ TAG=$(git rev-parse --short HEAD)
 Дальше при проверке релиза в каталоге `release_<TAG>` тег должен быть записан в `.env`.
 
 ### 2) Подготовить кэш модели и lock-файл
-Модель фиксируется в `models/model_revisions.json` и скачивается в `models/hf/` в формате HF cache.
-По умолчанию `make_release_bundle.sh` сам вызывает подготовку кэша перед сборкой релиза.
+Модель фиксируется в `models/model_lock.json` и скачивается в `models/hf/` в формате HF cache.
+По умолчанию `make_release_bundle.sh` сам вызывает подготовку кэша перед сборкой релиза, в зависимости от режима `MODEL_CACHE_MODE`.
 
 Для принудительного обновления ревизии используйте:
 ```bash
-REFRESH_MODEL_LOCK=1 bash scripts/models/ensure_model_cache.sh --refresh
+REFRESH_MODEL_LOCK=1 MODEL_CACHE_MODE=download bash scripts/models/ensure_model_cache.sh --refresh
 ```
 
 ### 3) Собрать релизный бандл
@@ -35,8 +35,14 @@ APP_VERSION="$TAG" bash scripts/docker/make_release_bundle.sh --no-prewarm
 
 **С подготовкой кэша модели (офлайн-готовый NLP):**
 ```bash
-APP_VERSION="$TAG" bash scripts/docker/make_release_bundle.sh --prewarm
+MODEL_CACHE_MODE=download APP_VERSION="$TAG" bash scripts/docker/make_release_bundle.sh --prewarm
 ```
+
+**С локальным кэшем модели из репозитория (MODEL_CACHE_MODE=local):**
+```bash
+MODEL_CACHE_MODE=local APP_VERSION="$TAG" bash scripts/docker/make_release_bundle.sh --no-prewarm
+```
+В этом режиме скрипт проверит наличие `models/hf/` и добавит его в релизный бандл.
 
 ### 4) Где появляется релиз
 Результат появится в каталоге:
@@ -56,10 +62,14 @@ release_<TAG>/
     portal_queries.yaml
   docs/
     INSTALL_CLOSED.md
+    USAGE.md
   scripts/
     closed/*.sh
   seed/*.sql
   fixtures/*
+  models/
+    model_lock.json
+    hf/            # присутствует при MODEL_CACHE_MODE=local
   SHA256SUMS
 ```
 
@@ -112,9 +122,19 @@ docker compose -f docker-compose.offline.yml run --rm web \
 После этого файл появится на хосте в `fixtures/test.docx`.
 
 ## Подготовка модели (model cache)
-- `scripts/models/ensure_model_cache.sh` фиксирует ревизию модели (commit sha) в `models/model_revisions.json` и скачивает файлы в `models/hf/`.
-- Docker build больше не ходит в интернет за моделью — он копирует локальный кэш `models/hf/` в образ.
-- `--prewarm` теперь является алиасом для подготовки кэша; `--no-prewarm` пропускает скачивание.
+Поддерживаются два режима через `MODEL_CACHE_MODE`:
+
+1) `download` (по умолчанию) — скачивание из открытого контура.
+2) `local` — использовать уже подготовленный локальный кэш `models/hf` без скачивания.
+
+Основной сценарий (download):
+- `scripts/models/ensure_model_cache.sh` фиксирует ревизию модели (commit sha) в `models/model_lock.json` и скачивает файлы в `models/hf/`.
+- `--prewarm` включает заполнение `/models/hf` на этапе сборки образа.
+
+Альтернативный сценарий (local):
+- перед запуском подготовьте `models/hf/` в репозитории (заполненный HF cache);
+- `MODEL_CACHE_MODE=local` заставляет `ensure_model_cache.sh` только валидировать наличие модели;
+- при сборке релиза кэш `models/hf` добавляется в релизный бандл и копируется в volume через `scripts/closed/seed.sh`.
 
 **Важно**
 - В релизном контуре нельзя выполнять `docker build` и нельзя тянуть образы из DockerHub. Проверку релиза выполняйте **только** через `docker load` и `docker compose up`.
@@ -131,4 +151,4 @@ docker compose -f docker-compose.offline.yml run --rm web \
 - **`rg: command not found`** — в закрытом контуре нет ripgrep. Используйте актуальные офлайн-скрипты из релиза (они не зависят от `rg`).
 - **`unknown flag: --pull`** — используйте актуальные офлайн-скрипты без `--pull`.
 - **`Missing image :local`** — тег не задан. Добавьте `TAG=<тег>` в `.env` перед запуском офлайн-скриптов.
-- **`SEMANTIC_MODEL_LOCAL_ONLY` ошибки при старте** — в образ не попал локальный кэш модели. Подготовьте `models/hf/` в открытом контуре и пересоберите релиз.
+- **`SEMANTIC_MODEL_LOCAL_ONLY` ошибки при старте** — отсутствует локальный кэш модели. Подготовьте `models/hf/` в открытом контуре и пересоберите релиз (или включите `MODEL_CACHE_MODE=local`).

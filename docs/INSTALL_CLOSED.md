@@ -9,9 +9,12 @@
 - `.env.example` — шаблон окружения.
 - `configs/portal_queries.yaml` — SQL-запросы к БД портала.
 - `docs/INSTALL_CLOSED.md` — эта инструкция.
+- `docs/USAGE.md` — инструкция оператора.
 - `scripts/closed/*.sh` — запуск/проверка/логи.
 - `seed/*.sql` — SQL для тестовой БД портала.
 - `fixtures/*` — тестовые файлы.
+- `models/model_lock.json` — lock-файл модели.
+- `models/hf/` — локальный кэш модели (если сборка в режиме `MODEL_CACHE_MODE=local`).
 - `SHA256SUMS` — контрольные суммы.
 
 ## Пошаговая установка
@@ -36,10 +39,25 @@ cp .env.example .env
 - `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` — Redis для Celery.
 - `APP_ADMIN_LOGIN` / `APP_ADMIN_PASSWORD` — логин администратора.
 - `SEMANTIC_MODEL_NAME` — имя модели, зашитой в образ.
+- `SEMANTIC_MODEL_PATH` — путь к локальному снапшоту (если нужен явный путь).
 - `PORTAL_QUERY_CONFIG_PATH` — путь к `configs/portal_queries.yaml`.
 - `SEMANTIC_MODEL_CACHE_DIR` — путь к кэшу модели (по умолчанию `/models/hf`).
 - `SEMANTIC_MODEL_LOCAL_ONLY` — принудительно использовать локальный кэш.
 - `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` — офлайн-режим Hugging Face/Transformers.
+- `MODEL_CACHE_MODE` — режим подготовки кэша (`local` в закрытом контуре).
+
+### 2.1) Режим модели
+В закрытом контуре интернета нет, поэтому используйте локальный режим:
+
+1) В `.env` установите:
+   ```bash
+   MODEL_CACHE_MODE=local
+   SEMANTIC_MODEL_LOCAL_ONLY=true
+   HF_HUB_OFFLINE=1
+   TRANSFORMERS_OFFLINE=1
+   ```
+2) Убедитесь, что в каталоге релиза есть `models/hf/`.
+3) Выполните `./scripts/closed/seed.sh` — он скопирует модель в volume `hf_cache`.
 
 ### 3) Импорт образов
 ```bash
@@ -59,6 +77,7 @@ docker images | grep analiz_svodok
 - выполняет миграции Django;
 - создаёт администратора;
 - заполняет справочники приложения;
+- при наличии `models/hf` копирует кэш в volume `hf_cache`;
 - применяет `seed/*.sql` для тестовой БД портала.
 
 ### 5) Запуск сервиса
@@ -136,6 +155,14 @@ LIMIT 5;
 - **`Missing image :local`** — тег не задан. Добавьте `TAG=<тег>` в `.env` перед запуском офлайн-скриптов.
 - **Ошибки подключения к БД портала** — проверьте `PORTAL_HOST`, `PORTAL_PORT`, `PORTAL_DB`, `PORTAL_USER`, `PORTAL_PASSWORD` в `.env`.
 - **`SEMANTIC_MODEL_LOCAL_ONLY` и ошибки модели** — релиз собран без подготовленного кэша модели. Нужен релиз с заполненным `models/hf/` в открытом контуре.
+  - Проверьте, что `models/hf/` есть в каталоге релиза и скрипт `seed.sh` был выполнен.
+  - Либо подготовьте кэш в открытом контуре через `MODEL_CACHE_MODE=download` и пересоберите релиз.
+- **Если модель не найдена локально**
+  1) В открытом контуре выполните:
+     ```bash
+     MODEL_CACHE_MODE=download bash scripts/models/ensure_model_cache.sh
+     ```
+  2) Пересоберите релиз с `MODEL_CACHE_MODE=local`, чтобы кэш попал в `release_<TAG>/models/hf`.
 - **В релизе отсутствуют стили/шаблоны** — проверьте исходную сборку образа: если build context был **десятки KB**, значит `.dockerignore` исключил почти всё. Нормальный build context — **десятки/сотни MB**.
   - Внутри образа должны быть каталоги:
     ```bash

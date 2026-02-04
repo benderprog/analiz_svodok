@@ -83,6 +83,15 @@ else:
 echo "Bootstrapping application reference data..."
 docker compose -f "$COMPOSE_FILE" run --rm web python manage.py bootstrap_local_app
 
+if [[ -d models/hf ]] && [[ -n "$(ls -A models/hf 2>/dev/null)" ]]; then
+  echo "Seeding semantic model cache into volume..."
+  docker run --rm \
+    -v "$PWD/models/hf:/data/models/hf:ro" \
+    -v hf_cache:/models/hf \
+    "analiz_svodok_web:${TAG}" \
+    bash -lc "cp -a /data/models/hf/. /models/hf/"
+fi
+
 if [[ -d seed ]]; then
   if [[ -f seed/portal_schema.sql ]]; then
     echo "Seeding portal database schema..."

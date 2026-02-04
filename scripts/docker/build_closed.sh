@@ -3,6 +3,7 @@ set -euo pipefail
 
 PREWARM="false"
 DEFAULT_MODEL_NAME="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+MODEL_CACHE_MODE="${MODEL_CACHE_MODE:-download}"
 
 usage() {
   cat <<'USAGE'
@@ -49,6 +50,7 @@ MODEL_NAME="${SEMANTIC_MODEL_NAME:-$DEFAULT_MODEL_NAME}"
 
 docker compose -f docker-compose.closed.yml build \
   --build-arg PREWARM="${PREWARM}" \
-  --build-arg SEMANTIC_MODEL_NAME="${MODEL_NAME}"
+  --build-arg SEMANTIC_MODEL_NAME="${MODEL_NAME}" \
+  --build-arg MODEL_CACHE_MODE="${MODEL_CACHE_MODE}"
 
 docker compose -f docker-compose.closed.yml images
