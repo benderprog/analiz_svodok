@@ -13,13 +13,8 @@ COPY . /app/
 ARG SEMANTIC_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 ARG PREWARM=false
 
-RUN mkdir -p /models/hf && \
-    if [ "$PREWARM" = "true" ]; then \
-      HF_HOME=/models/hf TRANSFORMERS_CACHE=/models/hf SENTENCE_TRANSFORMERS_HOME=/models/hf \
-      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${SEMANTIC_MODEL_NAME:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}')"; \
-    else \
-      echo "Skipping semantic model prewarm (PREWARM=$PREWARM)"; \
-    fi
+COPY models/hf/ /models/hf/
+RUN mkdir -p /models/hf
 
 ENV PYTHONUNBUFFERED=1 \
     HF_HOME=/models/hf \

@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-02-04T07:14:18Z",
+  "models": [
+    {
+      "repo_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "revision": "REQUIRES_REFRESH",
+      "cache_dir": "models/hf"
+    }
+  ]
+}

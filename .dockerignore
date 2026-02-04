@@ -22,5 +22,7 @@ node_modules/
 
 # если где-то есть большие локальные кэши моделей:
 models/
+!models/model_revisions.json
+!models/hf/**
 cache/
 hf_cache/

@@ -4,3 +4,5 @@ dist/
 *.tgz
 *.zip
 fixtures/**/*.docx
+models/hf/
+!models/hf/.keep
