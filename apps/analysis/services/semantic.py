@@ -141,11 +141,15 @@ class SubdivisionSemanticService:
             texts: list[str] = []
             entries: list[SubdivisionRef] = []
             for subdivision in cached_subdivisions:
+                aliases = self._extract_aliases(subdivision)
                 if subdivision.short_name:
                     texts.append(subdivision.short_name)
                     entries.append(subdivision)
                 if subdivision.full_name:
                     texts.append(subdivision.full_name)
+                    entries.append(subdivision)
+                for alias in aliases:
+                    texts.append(alias)
                     entries.append(subdivision)
             if texts:
                 self.__class__._cached_embeddings = self.model.encode(texts)
@@ -171,7 +175,9 @@ class SubdivisionSemanticService:
         if needs_normalized_refresh:
             normalized_entries: list[tuple[str, SubdivisionRef]] = []
             for subdivision in cached_subdivisions:
+                aliases = self._extract_aliases(subdivision)
                 candidates = [subdivision.short_name, subdivision.full_name]
+                candidates.extend(aliases)
                 candidates.extend(self._generate_aliases(subdivision.full_name))
                 for candidate in candidates:
                     normalized = self._normalize(candidate)
@@ -239,6 +245,15 @@ class SubdivisionSemanticService:
                 ]
             )
         return aliases
+
+    @staticmethod
+    def _extract_aliases(subdivision: SubdivisionRef) -> list[str]:
+        aliases = subdivision.aliases or []
+        if isinstance(aliases, list):
+            return [alias for alias in aliases if isinstance(alias, str) and alias.strip()]
+        if isinstance(aliases, str) and aliases.strip():
+            return [aliases]
+        return []
 
     def match(self, text: str) -> SemanticMatch:
         cached_subdivisions = self.__class__._cached_subdivisions

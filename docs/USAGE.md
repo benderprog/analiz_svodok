@@ -58,6 +58,23 @@
 - подразделение,
 - нарушители.
 
+## Справочник подразделений
+Справочник хранится в БД приложения (модель `SubdivisionRef`) и загружается
+из YAML-файла `configs/divisions.yaml`.
+
+Для синхронизации используйте команду:
+```bash
+python manage.py sync_divisions --file configs/divisions.yaml
+```
+
+Пример проверки в интерактивной оболочке:
+```bash
+python manage.py shell
+from apps.analysis.services.semantic import SubdivisionSemanticService
+svc = SubdivisionSemanticService("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+svc.match("службой ПОГЗ №2 в с. Васильки ...")
+```
+
 ## Типовые ошибки и что делать
 - **Не определилось подразделение**
   - Проверьте, что подразделение явно указано в тексте.
