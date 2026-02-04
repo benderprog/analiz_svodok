@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 PREWARM_FLAG="--no-prewarm"
 ENSURE_MODEL_CACHE="true"
+MODEL_CACHE_MODE="${MODEL_CACHE_MODE:-download}"
 
 usage() {
   cat <<'USAGE'
@@ -55,10 +56,10 @@ fi
 export APP_VERSION="$VERSION"
 
 if [[ "$ENSURE_MODEL_CACHE" == "true" ]]; then
-  "$REPO_ROOT/scripts/models/ensure_model_cache.sh"
+  MODEL_CACHE_MODE="$MODEL_CACHE_MODE" "$REPO_ROOT/scripts/models/ensure_model_cache.sh"
 fi
 
-"$SCRIPT_DIR/build_closed.sh" "$PREWARM_FLAG"
+MODEL_CACHE_MODE="$MODEL_CACHE_MODE" "$SCRIPT_DIR/build_closed.sh" "$PREWARM_FLAG"
 
 BUNDLE_DIR="$REPO_ROOT/dist/release_${VERSION}"
 mkdir -p "$BUNDLE_DIR/images"
@@ -74,11 +75,16 @@ docker save "${IMAGES[@]}" -o "$BUNDLE_DIR/images/images_${VERSION}.tar"
 
 cp "$REPO_ROOT/docker-compose.offline.yml" "$BUNDLE_DIR/"
 cp "$REPO_ROOT/.env.example" "$BUNDLE_DIR/"
+if [[ -f "$REPO_ROOT/models/model_lock.json" ]]; then
+  mkdir -p "$BUNDLE_DIR/models"
+  cp "$REPO_ROOT/models/model_lock.json" "$BUNDLE_DIR/models/"
+fi
 mkdir -p "$BUNDLE_DIR/configs"
 cp "$REPO_ROOT/configs/portal_queries.yaml" "$BUNDLE_DIR/configs/portal_queries.yaml"
 
 mkdir -p "$BUNDLE_DIR/docs"
 cp "$REPO_ROOT/docs/INSTALL_CLOSED.md" "$BUNDLE_DIR/docs/"
+cp "$REPO_ROOT/docs/USAGE.md" "$BUNDLE_DIR/docs/"
 
 if [[ -d "$REPO_ROOT/scripts/closed" ]]; then
   mkdir -p "$BUNDLE_DIR/scripts"
@@ -95,6 +101,15 @@ if [[ -d "$REPO_ROOT/fixtures" ]]; then
   cp -R "$REPO_ROOT/fixtures"/* "$BUNDLE_DIR/fixtures/"
 fi
 
+if [[ "$MODEL_CACHE_MODE" == "local" ]]; then
+  if [[ ! -d "$REPO_ROOT/models/hf" ]] || [[ -z "$(ls -A "$REPO_ROOT/models/hf")" ]]; then
+    echo "MODEL_CACHE_MODE=local requires models/hf to be populated." >&2
+    exit 1
+  fi
+  mkdir -p "$BUNDLE_DIR/models/hf"
+  cp -R "$REPO_ROOT/models/hf"/* "$BUNDLE_DIR/models/hf/"
+fi
+
 (
   cd "$BUNDLE_DIR"
   files=(
@@ -103,6 +118,7 @@ fi
     ".env.example"
     "configs/portal_queries.yaml"
     "docs/INSTALL_CLOSED.md"
+    "docs/USAGE.md"
   )
 
   if [[ -d scripts/closed ]]; then
@@ -121,6 +137,12 @@ fi
     while IFS= read -r -d '' file; do
       files+=("${file#./}")
     done < <(find fixtures -type f -print0)
+  fi
+
+  if [[ -d models ]]; then
+    while IFS= read -r -d '' file; do
+      files+=("${file#./}")
+    done < <(find models -type f -print0)
   fi
 
   printf '%s\n' "${files[@]}" | sort -u | xargs -r sha256sum > SHA256SUMS

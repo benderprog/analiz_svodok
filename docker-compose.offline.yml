@@ -98,6 +98,7 @@ services:
 
   portal-postgres:
     image: postgres:15-alpine
+    pull_policy: never
     environment:
       POSTGRES_DB: ${PORTAL_DB}
       POSTGRES_USER: ${PORTAL_USER}

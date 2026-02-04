@@ -12,9 +12,19 @@ COPY . /app/
 
 ARG SEMANTIC_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 ARG PREWARM=false
+ARG MODEL_CACHE_MODE=download
 
 COPY models/hf/ /models/hf/
 RUN mkdir -p /models/hf
+
+RUN if [ "$PREWARM" = "true" ] && [ "$MODEL_CACHE_MODE" = "download" ]; then \
+      pip install --no-cache-dir huggingface_hub >/dev/null && \
+      MODEL_NAME="$SEMANTIC_MODEL_NAME" \
+      MODEL_CACHE_MODE="$MODEL_CACHE_MODE" \
+      CACHE_DIR="/models/hf" \
+      LOCK_FILE="/app/models/model_lock.json" \
+      python /app/scripts/models/ensure_model_cache.py; \
+    fi
 
 ENV PYTHONUNBUFFERED=1 \
     HF_HOME=/models/hf \

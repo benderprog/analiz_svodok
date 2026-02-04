@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import logging
 import os
+from pathlib import Path
 import re
 import string
 
@@ -17,6 +19,43 @@ def _is_truthy(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_model_path(
+    model_name: str, cache_dir: str | None, lock_file: str | None
+) -> str | None:
+    if not cache_dir or not lock_file:
+        return None
+    lock_path = Path(lock_file)
+    if not lock_path.exists():
+        return None
+    try:
+        data = lock_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        lock = json.loads(data)
+    except ValueError:
+        return None
+    revision = None
+    for entry in lock.get("models", []):
+        if entry.get("repo_id") == model_name:
+            revision = entry.get("revision")
+            break
+    snapshots_root = (
+        Path(cache_dir)
+        / f"models--{model_name.replace('/', '--')}"
+        / "snapshots"
+    )
+    if revision:
+        candidate = snapshots_root / revision
+        if (candidate / "modules.json").exists():
+            return str(candidate)
+    if snapshots_root.exists():
+        for entry in sorted(snapshots_root.iterdir()):
+            if entry.is_dir() and (entry / "modules.json").exists():
+                return str(entry)
+    return None
 
 
 @dataclass
@@ -56,6 +95,16 @@ class SubdivisionSemanticService:
     def __init__(self, model_name: str) -> None:
         cache_dir = os.environ.get("SEMANTIC_MODEL_CACHE_DIR")
         local_only = _is_truthy(os.environ.get("SEMANTIC_MODEL_LOCAL_ONLY"))
+        explicit_path = os.environ.get("SEMANTIC_MODEL_PATH")
+        lock_file = os.environ.get(
+            "SEMANTIC_MODEL_LOCK_FILE", "models/model_lock.json"
+        )
+        if explicit_path and Path(explicit_path).exists():
+            model_name = explicit_path
+        elif local_only:
+            resolved = _resolve_model_path(model_name, cache_dir, lock_file)
+            if resolved:
+                model_name = resolved
         init_kwargs: dict[str, object] = {}
         if cache_dir:
             init_kwargs["cache_folder"] = cache_dir
