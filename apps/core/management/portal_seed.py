@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+import yaml
+from django.conf import settings
 
 
 @dataclass(frozen=True)
@@ -34,16 +39,12 @@ class DocxSeed:
 
 
 def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], list[EventSeed], list[DocxSeed]]:
-    subdivisions = [
-        SubdivisionSeed(id=101, fullname="ПУ-1 Центральное"),
-        SubdivisionSeed(id=102, fullname="ПУ-2 Северное"),
-        SubdivisionSeed(id=103, fullname="ПУ-3 Южное"),
-    ]
+    subdivisions = _load_divisions_from_yaml()
 
     base_events = [
         EventSeed(
-            id=1001,
-            subdivision_id=101,
+            id=2001,
+            subdivision_id=1101,
             date_detection=datetime(2024, 1, 10, 12, 0),
             offenders=[
                 OffenderSeed(
@@ -55,8 +56,8 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=1002,
-            subdivision_id=102,
+            id=2002,
+            subdivision_id=1102,
             date_detection=datetime(2024, 1, 11, 9, 30),
             offenders=[
                 OffenderSeed(
@@ -68,8 +69,8 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=1003,
-            subdivision_id=101,
+            id=2003,
+            subdivision_id=1202,
             date_detection=datetime(2024, 1, 12, 14, 20),
             offenders=[
                 OffenderSeed(
@@ -81,8 +82,8 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=1004,
-            subdivision_id=103,
+            id=2004,
+            subdivision_id=1201,
             date_detection=datetime(2024, 1, 13, 16, 45),
             offenders=[
                 OffenderSeed(
@@ -94,8 +95,8 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=1005,
-            subdivision_id=101,
+            id=2005,
+            subdivision_id=1301,
             date_detection=datetime(2024, 1, 14, 10, 15),
             offenders=[
                 OffenderSeed(
@@ -107,8 +108,8 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=1006,
-            subdivision_id=101,
+            id=2006,
+            subdivision_id=1101,
             date_detection=datetime(2024, 1, 14, 10, 15),
             offenders=[
                 OffenderSeed(
@@ -125,28 +126,28 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
         DocxSeed(
             case="3/3 совпало",
             paragraph=(
-                "10.01.2024 12:00 ПУ-1 Центральное: "
+                "10.01.2024 12:00 службой ПОГЗ №2 (с. Васильки) выявлены: "
                 "Иванов Иван Иванович 05.05.1990"
             ),
         ),
         DocxSeed(
             case="2/3 совпало (подразделение отличается)",
             paragraph=(
-                "11.01.2024 09:30 ПУ-1 Центральное: "
+                "11.01.2024 09:30 на посту ОПК «Центральное» (г. Южный) задержан: "
                 "Петров Петр Петрович 12.03.1985"
             ),
         ),
         DocxSeed(
             case="время в окне ±30 минут",
             paragraph=(
-                "12.01.2024 14:00 ПУ-1 Центральное: "
+                "12.01.2024 14:20 в районе ПОГК «Северная» (пгт Северный): "
                 "Сидорова Анна Сергеевна 01.07.1992"
             ),
         ),
         DocxSeed(
             case="нарушитель отличается",
             paragraph=(
-                "13.01.2024 16:45 ПУ-3 Южное: "
+                "13.01.2024 16:45 службой ПЗ1 выявлены: "
                 "Кузнецов Алексей Николаевич 09.09.1978, "
                 "Иванова Мария Ивановна 1990"
             ),
@@ -154,14 +155,14 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
         DocxSeed(
             case="не найдено",
             paragraph=(
-                "15.01.2024 08:00 ПУ-2 Северное: "
+                "15.01.2024 08:00 ПОГК «Солнечная» (пгт Солнечный): "
                 "Орлов Олег Олегович 10.10.1991"
             ),
         ),
         DocxSeed(
             case="дубликаты",
             paragraph=(
-                "14.01.2024 10:15 ПУ-1 Центральное: "
+                "14.01.2024 10:15 ПОГЗ №3 (с. Южные Ключи): "
                 "Романов Роман Романович 30.12.1995"
             ),
         ),
@@ -189,3 +190,65 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
         )
 
     return subdivisions, base_events + extra_events, docx_events
+
+
+def _load_divisions_from_yaml() -> list[SubdivisionSeed]:
+    config_path = Path(settings.BASE_DIR) / "configs" / "divisions.yaml"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Не найден файл подразделений: {config_path}")
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        data: dict[str, Any] = yaml.safe_load(handle) or {}
+
+    subdivisions: list[SubdivisionSeed] = []
+    for pu_entry in data.get("pus") or []:
+        for subdivision in pu_entry.get("subdivisions") or []:
+            subdivision_id = subdivision.get("id")
+            if subdivision_id is None:
+                continue
+            fullname = subdivision.get("fullname") or subdivision.get("full_name")
+            if not fullname:
+                fullname = _build_full_name(
+                    subdivision.get("type"),
+                    subdivision.get("number"),
+                    subdivision.get("name"),
+                    subdivision.get("locality"),
+                )
+            subdivisions.append(
+                SubdivisionSeed(id=int(subdivision_id), fullname=str(fullname))
+            )
+
+    return subdivisions
+
+
+def _build_full_name(
+    div_type: str | None,
+    number: int | None,
+    name: str | None,
+    locality: dict[str, Any] | None,
+) -> str:
+    short_name = _build_short_name(div_type, number, name)
+    locality_label = _format_locality(locality)
+    if locality_label:
+        return f"{short_name} ({locality_label})"
+    return short_name
+
+
+def _build_short_name(div_type: str | None, number: int | None, name: str | None) -> str:
+    if not div_type:
+        return ""
+    if number is not None:
+        return f"{div_type} №{number}"
+    if name:
+        return f"{div_type} «{name}»"
+    return str(div_type)
+
+
+def _format_locality(locality: dict[str, Any] | None) -> str:
+    if not locality:
+        return ""
+    kind = str(locality.get("kind") or "").strip()
+    name = str(locality.get("name") or "").strip()
+    if not kind or not name:
+        return ""
+    return f"{kind} {name}"
