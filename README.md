@@ -7,10 +7,10 @@
 Для офлайн-режима можно:
 - задать `SEMANTIC_MODEL_CACHE_DIR` для кэша модели;
 - включить `SEMANTIC_MODEL_LOCAL_ONLY=true`, чтобы запретить сетевые обращения;
+- при необходимости задать `SEMANTIC_MODEL_PATH` на локальный снапшот;
 - использовать стандартные переменные `HF_HOME`, `TRANSFORMERS_CACHE`, `SENTENCE_TRANSFORMERS_HOME`.
 
-## Закрытый контур (Docker)
-Подробная инструкция по развёртыванию в закрытом контуре, обновлениям и smoke-прогону
-находится в документе [docs/CLOSED_CONTOUR_DEPLOY.md](docs/CLOSED_CONTOUR_DEPLOY.md).
-
-Коротко: для closed контура используйте `scripts/docker/make_release_bundle.sh`; тяжёлая модель не используется.
+## Документация
+- [docs/INSTALL_OPEN.md](docs/INSTALL_OPEN.md) — сборка релиза в открытом контуре.
+- [docs/INSTALL_CLOSED.md](docs/INSTALL_CLOSED.md) — запуск в закрытом контуре без интернета.
+- [docs/USAGE.md](docs/USAGE.md) — инструкция оператора.

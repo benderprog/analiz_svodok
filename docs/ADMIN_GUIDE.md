@@ -25,7 +25,10 @@
 **Результаты и NLP:**
 - `RESULT_TTL_SECONDS` — TTL результатов в Redis (по умолчанию 1800 секунд).
 - `SEMANTIC_MODEL_NAME` — имя модели SentenceTransformer.
+- `SEMANTIC_MODEL_PATH` — путь к локальному снапшоту модели (если нужен явный путь).
 - `SEMANTIC_MODEL_CACHE_DIR`, `SEMANTIC_MODEL_LOCAL_ONLY` — локальный кэш/офлайн-режим.
+- `MODEL_CACHE_MODE` — режим подготовки кэша (`download`/`local`).
+- `SEMANTIC_MODEL_LOCK_FILE` — путь к lock-файлу ревизии модели.
 
 **SQL-контракт:**
 - `PORTAL_QUERY_CONFIG_PATH` — путь к `configs/portal_queries.yaml`.
