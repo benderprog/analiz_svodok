@@ -90,3 +90,13 @@ def test_extract_subdivision_text_from_pz_marker():
     assert result.subdivision_text is not None
     assert "пз" in result.subdivision_text.lower()
     assert "2" in result.subdivision_text
+
+
+def test_extract_subdivision_window_trims_noise():
+    service = ExtractService()
+    text = "В 12.40 02.02.2026 службой ПЗ-2 выявлены граждане РФ и составлен акт."
+
+    result = service.extract(text)
+
+    assert result.subdivision_text is not None
+    assert result.subdivision_text == "службой ПЗ-2"
