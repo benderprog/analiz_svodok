@@ -23,5 +23,5 @@ VALUES
     (1004, 'Алексей', 'Николаевич', 'Кузнецов', '1978-09-09'),
     (1005, 'Роман', 'Романович', 'Романов', '1995-12-30'),
     (1006, 'Роман', 'Романович', 'Романов', '1995-12-30')
-ON CONFLICT ON CONSTRAINT offenders_event_id_first_name_middle_name_last_name_date_of_birth_key
+ON CONFLICT (event_id, first_name, middle_name, last_name, date_of_birth)
 DO NOTHING;

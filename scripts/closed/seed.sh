@@ -86,12 +86,12 @@ docker compose -f "$COMPOSE_FILE" run --rm web python manage.py bootstrap_local_
 if [[ -d seed ]]; then
   if [[ -f seed/portal_schema.sql ]]; then
     echo "Seeding portal database schema..."
-    docker compose -f "$COMPOSE_FILE" exec -T portal-postgres psql -U "$PORTAL_USER" -d "$PORTAL_DB" -f /seed/portal_schema.sql
+    docker compose -f "$COMPOSE_FILE" exec -T portal-postgres psql -v ON_ERROR_STOP=1 -U "$PORTAL_USER" -d "$PORTAL_DB" -f /seed/portal_schema.sql
   fi
 
   if [[ -f seed/portal_data.sql ]]; then
     echo "Seeding portal database data..."
-    docker compose -f "$COMPOSE_FILE" exec -T portal-postgres psql -U "$PORTAL_USER" -d "$PORTAL_DB" -f /seed/portal_data.sql
+    docker compose -f "$COMPOSE_FILE" exec -T portal-postgres psql -v ON_ERROR_STOP=1 -U "$PORTAL_USER" -d "$PORTAL_DB" -f /seed/portal_data.sql
   fi
 else
   echo "Seed directory not found; skipping portal seed SQL."
