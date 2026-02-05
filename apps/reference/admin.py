@@ -50,13 +50,9 @@ class EventTypeAdmin(admin.ModelAdmin):
         if request.method == "POST":
             form = EventTypeImportForm(request.POST, request.FILES)
             if form.is_valid():
-                try:
-                    report = import_event_types_from_xlsx(
-                        form.cleaned_data["file"], dry_run=False
-                    )
-                except RuntimeError as exc:
-                    messages.error(request, str(exc))
-                    return redirect("..")
+                report = import_event_types_from_xlsx(
+                    form.cleaned_data["file"], dry_run=False
+                )
                 messages.success(
                     request,
                     (
