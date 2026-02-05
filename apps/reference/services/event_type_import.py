@@ -53,6 +53,9 @@ def import_event_types_from_xlsx(
     sheet = workbook.active
     report = EventTypeImportReport()
 
+    name_max_length = EventType._meta.get_field("name").max_length or 0
+    koap_max_length = EventTypePattern._meta.get_field("koap_article").max_length or 0
+
     with transaction.atomic():
         for row_index, (type_name, pattern_text, koap_article) in enumerate(
             _iter_rows(sheet.iter_rows(values_only=True)), start=1
@@ -62,6 +65,18 @@ def import_event_types_from_xlsx(
                 continue
             if not type_name and (pattern_text or koap_article):
                 report.add_error(row_index, "пустой тип события при заполненных данных")
+                continue
+            if name_max_length and len(type_name) > name_max_length:
+                report.add_error(
+                    row_index,
+                    f"слишком длинное имя типа события (>{name_max_length})",
+                )
+                continue
+            if koap_max_length and len(koap_article) > koap_max_length:
+                report.add_error(
+                    row_index,
+                    f"слишком длинная статья КОАП (>{koap_max_length})",
+                )
                 continue
 
             event_type, created = EventType.objects.update_or_create(

@@ -52,3 +52,23 @@ def test_import_event_type_patterns_upsert_without_duplicates(db, tmp_path):
     assert report_second.types_updated == 1
     assert report_second.patterns_updated == 1
     assert EventTypePattern.objects.count() == 1
+
+
+def test_import_event_type_allows_long_pattern_text(db, tmp_path):
+    long_pattern = "длинный паттерн " + ("x" * 2000)
+    path = _write_workbook(tmp_path, [["Тип A", long_pattern, "12.1"]])
+
+    report = import_event_types_from_xlsx(path)
+
+    assert report.patterns_created == 1
+    assert EventTypePattern.objects.get().pattern_text == long_pattern
+
+
+def test_import_event_type_rejects_long_koap_article(db, tmp_path):
+    path = _write_workbook(tmp_path, [["Тип A", "паттерн", "1" * 65]])
+
+    report = import_event_types_from_xlsx(path)
+
+    assert report.errors == ["row 1: слишком длинная статья КОАП (>64)"]
+    assert EventType.objects.count() == 0
+    assert EventTypePattern.objects.count() == 0
