@@ -10,6 +10,8 @@ import string
 
 from sentence_transformers import SentenceTransformer, util
 
+from django.db.utils import OperationalError, ProgrammingError
+
 from apps.reference.models import EventType, EventTypePattern, SubdivisionRef
 
 logger = logging.getLogger(__name__)
@@ -400,10 +402,17 @@ class EventTypeSemanticService:
     def __init__(self, model_name: str) -> None:
         self.model = load_semantic_model(model_name)
         if self.__class__._cached_patterns is None:
-            self.__class__._cached_patterns = list(
-                EventTypePattern.objects.select_related("event_type")
-                .filter(is_active=True, event_type__is_active=True)
-            )
+            try:
+                self.__class__._cached_patterns = list(
+                    EventTypePattern.objects.select_related("event_type")
+                    .filter(is_active=True, event_type__is_active=True)
+                )
+            except (ProgrammingError, OperationalError) as exc:
+                logger.warning(
+                    "Event type patterns unavailable; skipping semantic patterns load.",
+                    exc_info=exc,
+                )
+                self.__class__._cached_patterns = []
 
         cached_patterns = self.__class__._cached_patterns
         if (
