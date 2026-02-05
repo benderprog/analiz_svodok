@@ -60,7 +60,7 @@ class ExtractService:
             rf"(?:\b[Вв]\s+)?(?P<time>{self._time_pattern.pattern})\s+(?P<date>{self._date_pattern.pattern})"
         )
         self._date_then_time_pattern = re.compile(
-            rf"(?P<date>{self._date_pattern.pattern})\s+(?P<time>{self._time_pattern.pattern})"
+            rf"(?P<date>{self._date_pattern.pattern})\s*(?:,?\s*[Вв]\s*)?(?P<time>{self._time_pattern.pattern})"
         )
 
     def extract(self, text: str) -> ExtractedAttributes:
