@@ -108,6 +108,18 @@ python manage.py sync_divisions --file configs/divisions.yaml
 `fixtures/*.docx`) либо из `seed/portal_data.sql`.
 Для локальных настроек скрипт сначала читает `.env.local` (если есть), затем `.env`.
 
+### Локальное наполнение портальной БД
+Пример полного цикла с очисткой схемы и проверкой:
+```bash
+source .env.local
+./scripts/seed_local_portal.sh --reset
+./scripts/verify_local_portal.sh
+```
+
+Все идентификаторы в тестовой портальной БД — **UUID** (включая `subdivision.id`,
+`events.id` и `offenders.id`). В `seed/portal_data.sql` используются фиксированные UUID
+для детерминированных прогонов.
+
 Ожидаемый результат — успешный матчинг по примерам:
 ```text
 службой ПОГЗ №2 (с. Васильки) выявлены...
@@ -149,5 +161,6 @@ docker compose -f docker-compose.offline.yml run --rm web \
 После генерации используйте `fixtures/test.docx` для загрузки.
 
 ## UUID в тестовой БД портала
-- В тестовой БД портала `events.id` и `offenders.event_id` используют UUID.
+- В тестовой БД портала все ключевые идентификаторы используют UUID
+  (`subdivision.id`, `events.id`, `offenders.id`, а также все FK ссылки).
 - В `seed/portal_data.sql` применяются фиксированные UUID для детерминированных прогонов.
