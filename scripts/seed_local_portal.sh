@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ -f .env ]]; then
-  set -a
-  . ./.env
-  set +a
-elif [[ -f .env.local ]]; then
+if [[ -f .env.local ]]; then
   set -a
   . ./.env.local
+  set +a
+elif [[ -f .env ]]; then
+  set -a
+  . ./.env
   set +a
 fi
 

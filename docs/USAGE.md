@@ -106,6 +106,7 @@ python manage.py sync_divisions --file configs/divisions.yaml
 Скрипт применяет `seed/portal_schema.sql`, а затем наполняет БД портала
 данными из DOCX (если есть `fixtures/test_svodka_semantic3.docx` или любой
 `fixtures/*.docx`) либо из `seed/portal_data.sql`.
+Для локальных настроек скрипт сначала читает `.env.local` (если есть), затем `.env`.
 
 Ожидаемый результат — успешный матчинг по примерам:
 ```text
