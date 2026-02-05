@@ -180,3 +180,43 @@ def test_extract_subdivision_window_trims_noise():
 
     assert result.subdivision_text is not None
     assert result.subdivision_text == "службой ПЗ-2"
+
+
+def test_extract_date_then_time_with_colon():
+    service = ExtractService()
+    text = "02.02.2026 в 15:05 произошло событие."
+
+    result = service.extract(text)
+
+    assert result.timestamp == datetime(2026, 2, 2, 15, 5)
+    assert result.timestamp_has_time is True
+
+
+def test_extract_date_then_time_with_dot():
+    service = ExtractService()
+    text = "02.02.2026 в 15.05 произошло событие."
+
+    result = service.extract(text)
+
+    assert result.timestamp == datetime(2026, 2, 2, 15, 5)
+    assert result.timestamp_has_time is True
+
+
+def test_extract_time_then_date_with_prefix_still_works():
+    service = ExtractService()
+    text = "В 09.05 02.02.2026 зафиксировано событие."
+
+    result = service.extract(text)
+
+    assert result.timestamp == datetime(2026, 2, 2, 9, 5)
+    assert result.timestamp_has_time is True
+
+
+def test_extract_date_only_sets_missing_time_flag():
+    service = ExtractService()
+    text = "02.02.2026 произошло событие."
+
+    result = service.extract(text)
+
+    assert result.timestamp == datetime(2026, 2, 2)
+    assert result.timestamp_has_time is False

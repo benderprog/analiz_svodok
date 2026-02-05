@@ -7,9 +7,14 @@ import os
 from pathlib import Path
 import re
 import string
+import tempfile
+import time
+from contextlib import contextmanager
 
 from sentence_transformers import SentenceTransformer, util
 
+from django.db.models import Count, Max
+from django.db.models.functions import Length, Trim
 from django.db.utils import OperationalError, ProgrammingError
 
 from apps.reference.models import EventType, EventTypePattern, SubdivisionRef
@@ -404,55 +409,152 @@ class EventTypeSemanticService:
     _cached_embeddings: object | None = None
     _cached_embedding_patterns: list[EventTypePattern] | None = None
     _cached_embedding_texts: list[str] | None = None
+    _cached_fingerprint: tuple[int, str | None] | None = None
 
     def __init__(self, model_name: str) -> None:
         self.model = load_semantic_model(model_name)
-        self._ensure_cache()
+        self._refresh_cache_if_needed()
 
-    def _ensure_cache(self) -> None:
-        cls = self.__class__
-        if cls._cached_patterns is None:
+    def _pattern_queryset(self):
+        return (
+            EventTypePattern.objects.select_related("event_type")
+            .filter(is_active=True, event_type__is_active=True)
+            .annotate(pattern_len=Length(Trim("pattern_text")))
+            .filter(pattern_len__gt=0)
+        )
+
+    def _current_fingerprint(self) -> tuple[int, str | None] | None:
+        try:
+            aggregates = self._pattern_queryset().aggregate(
+                count=Count("id"),
+                max_id=Max("id"),
+            )
+        except (ProgrammingError, OperationalError) as exc:
+            logger.warning(
+                "Event type patterns unavailable; skipping semantic patterns fingerprint.",
+                exc_info=exc,
+            )
+            return None
+        count = int(aggregates["count"] or 0)
+        max_id = aggregates["max_id"]
+        return count, str(max_id) if max_id else None
+
+    def _event_type_debug_enabled(self) -> bool:
+        if _is_truthy(os.environ.get("EVENT_TYPE_DEBUG")):
+            return True
+        try:
+            from django.conf import settings
+        except Exception:
+            return False
+        return bool(getattr(settings, "EVENT_TYPE_DEBUG", False))
+
+    def _cache_lock_path(self) -> Path:
+        return Path(tempfile.gettempdir()) / "event_type_semantic.lock"
+
+    @contextmanager
+    def _cache_lock(self, timeout: float = 10.0, interval: float = 0.2):
+        lock_path = self._cache_lock_path()
+        start = time.monotonic()
+        fd = None
+        while fd is None:
             try:
-                cls._cached_patterns = list(
-                    EventTypePattern.objects.select_related("event_type")
-                    .filter(is_active=True, event_type__is_active=True)
-                )
-            except (ProgrammingError, OperationalError) as exc:
-                logger.warning(
-                    "Event type patterns unavailable; skipping semantic patterns load.",
-                    exc_info=exc,
-                )
-                cls._cached_patterns = []
+                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                try:
+                    stale_seconds = 300
+                    mtime = lock_path.stat().st_mtime
+                    if time.time() - mtime > stale_seconds:
+                        lock_path.unlink(missing_ok=True)
+                        continue
+                except FileNotFoundError:
+                    continue
+                if time.monotonic() - start >= timeout:
+                    break
+                time.sleep(interval)
+        try:
+            yield fd is not None
+        finally:
+            if fd is not None:
+                os.close(fd)
+                try:
+                    lock_path.unlink()
+                except FileNotFoundError:
+                    pass
+
+    def _rebuild_cache(self, fingerprint: tuple[int, str | None]) -> None:
+        cls = self.__class__
+        try:
+            cls._cached_patterns = list(self._pattern_queryset())
+        except (ProgrammingError, OperationalError) as exc:
+            logger.warning(
+                "Event type patterns unavailable; skipping semantic patterns load.",
+                exc_info=exc,
+            )
+            cls._cached_patterns = []
+            cls._cached_embeddings = []
+            cls._cached_embedding_patterns = []
+            cls._cached_embedding_texts = []
+            cls._cached_fingerprint = fingerprint
+            return
 
         cached_patterns = cls._cached_patterns
+        texts: list[str] = []
+        patterns: list[EventTypePattern] = []
+        for pattern in cached_patterns:
+            if not pattern.pattern_text or not pattern.pattern_text.strip():
+                continue
+            texts.append(pattern.pattern_text)
+            patterns.append(pattern)
+        if texts:
+            cls._cached_embeddings = self.model.encode(
+                texts, normalize_embeddings=True
+            )
+            cls._cached_embedding_patterns = patterns
+            cls._cached_embedding_texts = texts
+        else:
+            cls._cached_embeddings = []
+            cls._cached_embedding_patterns = []
+            cls._cached_embedding_texts = []
+        cls._cached_fingerprint = fingerprint
+        if self._event_type_debug_enabled():
+            logger.info(
+                "Event type semantic cache rebuilt: %s patterns.",
+                len(patterns),
+            )
+
+    def _refresh_cache_if_needed(self) -> None:
+        cls = self.__class__
+        fingerprint = self._current_fingerprint()
+        if fingerprint is None:
+            return
         if (
-            cls._cached_embeddings is None
-            or cls._cached_embedding_patterns is None
-            or cls._cached_embedding_texts is None
+            cls._cached_fingerprint == fingerprint
+            and cls._cached_embeddings is not None
+            and cls._cached_patterns is not None
         ):
-            texts: list[str] = []
-            patterns: list[EventTypePattern] = []
-            for pattern in cached_patterns:
-                if not pattern.pattern_text or not pattern.pattern_text.strip():
-                    continue
-                texts.append(pattern.pattern_text)
-                patterns.append(pattern)
-            if texts:
-                cls._cached_embeddings = self.model.encode(
-                    texts, normalize_embeddings=True
+            return
+        with self._cache_lock() as acquired:
+            if not acquired:
+                logger.warning(
+                    "Event type semantic cache rebuild lock timeout; rebuilding without lock."
                 )
-                cls._cached_embedding_patterns = patterns
-                cls._cached_embedding_texts = texts
-            else:
-                cls._cached_embeddings = []
-                cls._cached_embedding_patterns = []
-                cls._cached_embedding_texts = []
+            fingerprint = self._current_fingerprint()
+            if fingerprint is None:
+                return
+            if (
+                cls._cached_fingerprint == fingerprint
+                and cls._cached_embeddings is not None
+                and cls._cached_patterns is not None
+            ):
+                return
+            self._rebuild_cache(fingerprint)
 
     def match(self, text: str) -> EventTypeSemanticMatch | None:
+        self._refresh_cache_if_needed()
         cls = self.__class__
         cached_embeddings = cls._cached_embeddings
         if cached_embeddings is None:
-            self._ensure_cache()
+            self._refresh_cache_if_needed()
             cached_embeddings = cls._cached_embeddings
 
         cached_patterns = cls._cached_patterns
@@ -466,11 +568,19 @@ class EventTypeSemanticService:
         if not text:
             return EventTypeSemanticMatch(event_type=None, pattern=None, similarity=0.0)
 
+        debug_enabled = self._event_type_debug_enabled()
+        if debug_enabled:
+            snippet = text[:500].replace("\n", " ").strip()
+            logger.info("Event type semantic input: %s", snippet)
+
         candidate_embedding = self.model.encode(text, normalize_embeddings=True)
         best_score = -1.0
         best_pattern: EventTypePattern | None = None
+        debug_scores: list[tuple[float, EventTypePattern]] = []
         for pattern, embedding in zip(cached_embedding_patterns, cached_embeddings):
             score = float(util.cos_sim(candidate_embedding, embedding))
+            if debug_enabled:
+                debug_scores.append((score, pattern))
             if score > best_score or (
                 score == best_score
                 and best_pattern is not None
@@ -478,6 +588,18 @@ class EventTypeSemanticService:
             ):
                 best_score = score
                 best_pattern = pattern
+
+        if debug_enabled and debug_scores:
+            top_candidates = sorted(debug_scores, key=lambda item: item[0], reverse=True)[:3]
+            for rank, (score, pattern) in enumerate(top_candidates, start=1):
+                pattern_text = (pattern.pattern_text or "")[:120].replace("\n", " ")
+                logger.info(
+                    "Event type candidate %s: score=%.4f type=%s pattern=%s",
+                    rank,
+                    score,
+                    pattern.event_type.name,
+                    pattern_text,
+                )
 
         if best_pattern is None:
             return EventTypeSemanticMatch(event_type=None, pattern=None, similarity=0.0)
