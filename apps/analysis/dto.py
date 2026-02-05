@@ -45,6 +45,7 @@ class PortalEvent:
     subdivision_short_name: str | None
     subdivision_full_name: str | None
     offenders: list[Offender]
+    event_type_name: str | None = None
 
 
 @dataclass

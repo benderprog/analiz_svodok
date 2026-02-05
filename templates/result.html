@@ -59,6 +59,29 @@
                   {% endfor %}
                 </tbody>
               </table>
+              {% if item.event_type %}
+                <div class="event-type-block">
+                  <h5>Тип события</h5>
+                  <ul>
+                    <li>
+                      Определено:
+                      {% if item.event_type.detected %}
+                        {{ item.event_type.detected }}
+                        {% if item.event_type.detected_score %}
+                          (score {{ item.event_type.detected_score }})
+                        {% endif %}
+                      {% else %}
+                        не удалось идентифицировать
+                      {% endif %}
+                    </li>
+                    <li>
+                      В БД:
+                      {{ item.event_type.stored|default:"не задан" }}
+                    </li>
+                    <li>{{ item.event_type.message }}</li>
+                  </ul>
+                </div>
+              {% endif %}
               {% if item.event_found %}
                 <div class="portal-block">
                   <h5>Найденная запись в БД</h5>
@@ -79,6 +102,9 @@
                         {{ match.subdivision_short_name|default:match.subdivision_name }}
                         ({{ match.subdivision_full_name|default:match.subdivision_name }})
                       </div>
+                      {% if match.event_type_name %}
+                        <div>Тип события (БД): {{ match.event_type_name }}</div>
+                      {% endif %}
                       <div>Нарушители: {{ match.offenders|join:", " }}</div>
                     </div>
                   {% endfor %}

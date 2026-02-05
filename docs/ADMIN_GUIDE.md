@@ -29,6 +29,7 @@
 - `SEMANTIC_MODEL_CACHE_DIR`, `SEMANTIC_MODEL_LOCAL_ONLY` — локальный кэш/офлайн-режим.
 - `MODEL_CACHE_MODE` — режим подготовки кэша (`download`/`local`).
 - `SEMANTIC_MODEL_LOCK_FILE` — путь к lock-файлу ревизии модели.
+- `EVENT_TYPE_MATCH_THRESHOLD` — порог определения типа события (по умолчанию 0.78).
 
 **SQL-контракт:**
 - `PORTAL_QUERY_CONFIG_PATH` — путь к `configs/portal_queries.yaml`.
@@ -43,6 +44,46 @@
 docker compose -f docker-compose.offline.yml run --rm web \
   python manage.py shell -c "from apps.core.models import Setting; Setting.objects.update_or_create(key='semantic_threshold_subdivision', defaults={'value': 0.85}); Setting.objects.update_or_create(key='time_window_minutes', defaults={'value': 45});"
 ```
+
+## Типы событий и паттерны событий
+Справочник хранится в БД приложения и используется при семантическом сопоставлении текста.
+
+### Формат XLSX
+Колонки:
+1. **Тип события** (строка, обязательна для строки).
+2. **Паттерн события** (текстовый фрагмент, необязателен).
+3. **Статья КоАП** (строка «номер + часть», необязателен).
+
+Примеры строк:
+```
+Выявление | выявлены | 12.1
+Задержание | задержан | 18.8
+Задержание | задержаны |
+Проверка | на посту |
+Опрос | опрошен |
+Осмотр | осмотр проведен | 27.3
+Выявление | обнаружены |
+```
+
+### Импорт через админку
+1) Откройте **Типы событий**.
+2) Нажмите **Импорт XLSX**.
+3) Загрузите файл и проверьте отчёт по созданным/обновлённым строкам.
+
+### Импорт через команду
+```bash
+python manage.py import_event_types_xlsx --path /path/to/file.xlsx
+```
+Для проверки без сохранения:
+```bash
+python manage.py import_event_types_xlsx --path /path/to/file.xlsx --dry-run
+```
+
+### Troubleshooting
+- **Ошибка “row N: пустой тип события при заполненных данных”** —
+  в строке указан паттерн или статья КоАП без типа события.
+- **Ничего не импортируется** —
+  убедитесь, что файл именно `.xlsx`, и в нём заполнены первые три колонки.
 
 ## Конфиг SQL-запросов к порталу
 Файл: `configs/portal_queries.yaml`.

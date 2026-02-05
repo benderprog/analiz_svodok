@@ -101,6 +101,7 @@ DOCS_DIR = BASE_DIR / "docs"
 SEMANTIC_MODEL_NAME = os.environ.get(
     "SEMANTIC_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 )
+EVENT_TYPE_MATCH_THRESHOLD = float(os.environ.get("EVENT_TYPE_MATCH_THRESHOLD", "0.78"))
 
 APP_ADMIN_LOGIN = os.environ.get("APP_ADMIN_LOGIN", "admin")
 APP_ADMIN_PASSWORD = os.environ.get("APP_ADMIN_PASSWORD", "admin")
