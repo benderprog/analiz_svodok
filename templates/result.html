@@ -59,22 +59,20 @@
                   {% endfor %}
                 </tbody>
               </table>
-              {% if item.explanation %}
-                <div class="diff-block">
-                  <h5>Пояснение</h5>
-                  <ul>
-                    {% for line in item.explanation %}
-                      <li>{{ line }}</li>
-                    {% endfor %}
-                  </ul>
-                </div>
-              {% endif %}
               {% if item.event_found %}
                 <div class="portal-block">
                   <h5>Найденная запись в БД</h5>
+                  {% if item.match_lines %}
+                    <ul>
+                      {% for line in item.match_lines %}
+                        <li>{{ line }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
                   {% for match in item.matches %}
                     <div class="portal-record">
                       <div>Запись {{ forloop.counter }}</div>
+                      <div>event_id: {{ match.event_id }}</div>
                       <div>Время: {{ match.date_detection }}</div>
                       <div>
                         Подразделение:
@@ -84,6 +82,15 @@
                       <div>Нарушители: {{ match.offenders|join:", " }}</div>
                     </div>
                   {% endfor %}
+                </div>
+              {% endif %}
+              {% if item.notes %}
+                <div class="diff-block">
+                  <ul>
+                    {% for line in item.notes %}
+                      <li>{{ line }}</li>
+                    {% endfor %}
+                  </ul>
                 </div>
               {% endif %}
             </article>

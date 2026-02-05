@@ -13,8 +13,10 @@ from natasha import (
     NewsNERTagger,
     Segmenter,
 )
+from pymorphy2 import MorphAnalyzer
 
 from apps.analysis.dto import Offender
+from apps.reference.models import SubdivisionRef
 
 
 @dataclass
@@ -27,6 +29,9 @@ class ExtractedAttributes:
 
 
 class ExtractService:
+    _morph_analyzer: MorphAnalyzer | None = None
+    _subdivision_token_stoplist: set[str] | None = None
+
     def __init__(self) -> None:
         self.segmenter = Segmenter()
         self.morph_vocab = MorphVocab()
@@ -121,7 +126,7 @@ class ExtractService:
             )
 
         offenders.extend(self._extract_initials_fallback(text, per_spans))
-        return offenders
+        return self._filter_false_offenders(offenders)
 
     def _match_name(
         self, text: str
@@ -290,6 +295,10 @@ class ExtractService:
         if birth_date:
             return birth_date, None
 
+        year_only = self._extract_birth_year_immediate(context)
+        if year_only is not None:
+            return None, year_only
+
         tokens = self._tokenize_context(context)
         for match in self._birth_year_pattern.finditer(context):
             year = int(match.group("year"))
@@ -299,6 +308,89 @@ class ExtractService:
             if self._has_year_marker(tokens, token_index):
                 return None, year
         return None, None
+
+    def _extract_birth_year_immediate(self, context: str) -> int | None:
+        match = re.match(r"^[\s,\(\[]*(?P<year>\d{4})\b", context)
+        if not match:
+            return None
+        if match.start("year") > 5:
+            return None
+        year = int(match.group("year"))
+        if not self._is_birth_year_in_range(year):
+            return None
+        return year
+
+    def _is_birth_year_in_range(self, year: int) -> bool:
+        current_year = datetime.now().year
+        return 1900 <= year <= current_year - 10
+
+    def _filter_false_offenders(self, offenders: list[Offender]) -> list[Offender]:
+        filtered: list[Offender] = []
+        for offender in offenders:
+            token = self._single_word_offender(offender)
+            if not token:
+                filtered.append(offender)
+                continue
+            cleaned = self._normalize_stoplist_token(token)
+            if not cleaned:
+                filtered.append(offender)
+                continue
+            if self._is_adjective(cleaned):
+                continue
+            stoplist = self._get_subdivision_token_stoplist()
+            if stoplist and cleaned.lower() in stoplist:
+                continue
+            filtered.append(offender)
+        return filtered
+
+    def _single_word_offender(self, offender: Offender) -> str | None:
+        parts = [offender.last_name, offender.first_name, offender.middle_name]
+        present = [part for part in parts if part]
+        if len(present) != 1:
+            return None
+        token = present[0]
+        if " " in token:
+            return None
+        return token
+
+    def _normalize_stoplist_token(self, token: str) -> str:
+        return token.strip(".,;:()[]{}\"'«»")
+
+    def _is_adjective(self, token: str) -> bool:
+        analyzer = self._get_morph_analyzer()
+        for parsed in analyzer.parse(token):
+            if parsed.tag.POS in {"ADJF", "ADJS"}:
+                return True
+        return False
+
+    def _get_morph_analyzer(self) -> MorphAnalyzer:
+        if self.__class__._morph_analyzer is None:
+            self.__class__._morph_analyzer = MorphAnalyzer()
+        return self.__class__._morph_analyzer
+
+    def _get_subdivision_token_stoplist(self) -> set[str]:
+        cached = self.__class__._subdivision_token_stoplist
+        if cached is not None:
+            return cached
+        try:
+            subdivisions = SubdivisionRef.objects.all()
+        except Exception:
+            return set()
+        stoplist: set[str] = set()
+        for subdivision in subdivisions:
+            values = [subdivision.full_name] + list(subdivision.aliases or [])
+            for value in values:
+                if not value:
+                    continue
+                for token in value.split():
+                    cleaned = self._normalize_stoplist_token(token)
+                    if len(cleaned) < 4:
+                        continue
+                    if any(char.isdigit() for char in cleaned):
+                        continue
+                    stoplist.add(cleaned.lower())
+        self.__class__._subdivision_token_stoplist = stoplist
+        return stoplist
 
     def _tokenize_context(self, text: str) -> list[dict[str, object]]:
         tokens: list[dict[str, object]] = []

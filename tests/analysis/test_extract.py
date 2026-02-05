@@ -38,7 +38,7 @@ def test_extract_birth_date_from_full_name():
     assert offender.birth_year is None
 
 
-def test_extract_birth_year_requires_marker():
+def test_extract_birth_year_after_name_without_marker():
     service = ExtractService()
     text = "Иванова Мария Ивановна 1990"
 
@@ -46,7 +46,29 @@ def test_extract_birth_year_requires_marker():
 
     assert result.offenders
     offender = result.offenders[0]
-    assert offender.birth_year is None
+    assert offender.birth_year == 1990
+
+
+def test_extract_birth_year_after_name_with_comma():
+    service = ExtractService()
+    text = "Иванова Мария Ивановна, 1990"
+
+    result = service.extract(text)
+
+    assert result.offenders
+    offender = result.offenders[0]
+    assert offender.birth_year == 1990
+
+
+def test_extract_birth_year_after_name_with_parenthesis():
+    service = ExtractService()
+    text = "Иванова Мария Ивановна (1990)"
+
+    result = service.extract(text)
+
+    assert result.offenders
+    offender = result.offenders[0]
+    assert offender.birth_year == 1990
 
 
 def test_extract_birth_year_with_marker():
@@ -59,6 +81,17 @@ def test_extract_birth_year_with_marker():
     offender = result.offenders[0]
     assert offender.birth_year == 1990
     assert offender.date_of_birth is None
+
+
+def test_extract_birth_year_not_immediate():
+    service = ExtractService()
+    text = "Иванова Мария Ивановна задержана. Номер дела 1990."
+
+    result = service.extract(text)
+
+    assert result.offenders
+    offender = result.offenders[0]
+    assert offender.birth_year is None
 
 
 def test_extract_initials_with_birth_year():
