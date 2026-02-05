@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -51,24 +52,43 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DB", "app_db"),
-        "USER": os.environ.get("POSTGRES_USER", "app_user"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "app_password"),
-        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
-    },
-    "portal": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("PORTAL_DB", "portal_db"),
-        "USER": os.environ.get("PORTAL_USER", "portal_user"),
-        "PASSWORD": os.environ.get("PORTAL_PASSWORD", "portal_password"),
-        "HOST": os.environ.get("PORTAL_HOST", "localhost"),
-        "PORT": os.environ.get("PORTAL_PORT", "5432"),
-    },
-}
+USE_SQLITE_FOR_TESTS = (
+    os.environ.get("USE_SQLITE_FOR_TESTS", "").lower() in {"1", "true", "yes"}
+    or "PYTEST_CURRENT_TEST" in os.environ
+    or "pytest" in sys.modules
+    or any(arg.startswith("pytest") for arg in sys.argv)
+)
+
+if USE_SQLITE_FOR_TESTS:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        },
+        "portal": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        },
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB", "app_db"),
+            "USER": os.environ.get("POSTGRES_USER", "app_user"),
+            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "app_password"),
+            "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        },
+        "portal": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("PORTAL_DB", "portal_db"),
+            "USER": os.environ.get("PORTAL_USER", "portal_user"),
+            "PASSWORD": os.environ.get("PORTAL_PASSWORD", "portal_password"),
+            "HOST": os.environ.get("PORTAL_HOST", "localhost"),
+            "PORT": os.environ.get("PORTAL_PORT", "5432"),
+        },
+    }
 
 DATABASE_ROUTERS = ["apps.analysis.db_router.PortalRouter"]
 

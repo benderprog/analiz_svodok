@@ -42,6 +42,7 @@ def test_event_type_semantic_match_smoke(db, monkeypatch):
     EventTypeSemanticService._cached_embeddings = None
     EventTypeSemanticService._cached_embedding_patterns = None
     EventTypeSemanticService._cached_embedding_texts = None
+    EventTypeSemanticService._cached_fingerprint = None
 
     type_a = EventType.objects.create(name="Тип A")
     type_b = EventType.objects.create(name="Тип B")
@@ -66,6 +67,7 @@ def test_event_type_match_returns_none_with_empty_patterns(db, monkeypatch):
     EventTypeSemanticService._cached_embeddings = None
     EventTypeSemanticService._cached_embedding_patterns = None
     EventTypeSemanticService._cached_embedding_texts = None
+    EventTypeSemanticService._cached_fingerprint = None
 
     service = EventTypeSemanticService("dummy")
 
@@ -80,6 +82,7 @@ def test_event_type_match_with_patterns_does_not_crash(db, monkeypatch):
     EventTypeSemanticService._cached_embeddings = None
     EventTypeSemanticService._cached_embedding_patterns = None
     EventTypeSemanticService._cached_embedding_texts = None
+    EventTypeSemanticService._cached_fingerprint = None
 
     event_type = EventType.objects.create(name="Тип C")
     EventTypePattern.objects.create(event_type=event_type, pattern_text="пример C")
@@ -88,3 +91,28 @@ def test_event_type_match_with_patterns_does_not_crash(db, monkeypatch):
 
     match = service.match("пример C")
     assert match is not None
+
+
+def test_event_type_semantic_cache_invalidation(db, monkeypatch):
+    monkeypatch.setattr(semantic, "load_semantic_model", lambda _: DummyModel())
+    monkeypatch.setattr(semantic.util, "cos_sim", _dummy_cos_sim)
+    EventTypeSemanticService._cached_patterns = None
+    EventTypeSemanticService._cached_embeddings = None
+    EventTypeSemanticService._cached_embedding_patterns = None
+    EventTypeSemanticService._cached_embedding_texts = None
+    EventTypeSemanticService._cached_fingerprint = None
+
+    type_a = EventType.objects.create(name="Тип A")
+    EventTypePattern.objects.create(event_type=type_a, pattern_text="короткий")
+
+    service = EventTypeSemanticService("dummy")
+    match = service.match("короткий")
+    assert match.event_type == type_a
+
+    type_b = EventType.objects.create(name="Тип B")
+    EventTypePattern.objects.create(
+        event_type=type_b, pattern_text="очень длинный паттерн"
+    )
+
+    new_match = service.match("очень длинный паттерн")
+    assert new_match.event_type == type_b
