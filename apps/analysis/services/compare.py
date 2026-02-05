@@ -456,7 +456,10 @@ class CompareService:
                 highlights.append((offender.raw, offenders_status.status))
         highlighted_text = highlight_text(extracted.raw_text, highlights)
 
-        explanation: list[str] = []
+        match_lines: list[str] = []
+        summary_lines: list[str] = []
+        diff_lines: list[str] = []
+        extra_lines: list[str] = []
         if primary_match:
             metrics = match_metrics.get(primary_match.event_id, {})
             matched_flags = []
@@ -466,23 +469,14 @@ class CompareService:
                 matched_flags.append("subdivision")
             if metrics.get("offenders_match"):
                 matched_flags.append("offenders")
-            explanation.append(f"Выбранный event_id: {primary_match.event_id}")
-            explanation.append(
-                "Сработали признаки: " + (", ".join(matched_flags) or "нет")
-            )
+            match_lines.append("Определено по: " + (", ".join(matched_flags) or "нет"))
             if metrics.get("time_delta") is not None and metrics.get("time_delta") != float("inf"):
-                explanation.append(
-                    f"Δt: {round(float(metrics['time_delta']))} мин"
-                )
-            if extracted.subdivision_similarity is not None:
-                explanation.append(
-                    f"subdivision_similarity: {round(extracted.subdivision_similarity, 3)}"
-                )
+                match_lines.append(f"Δt: {round(float(metrics['time_delta']))} мин")
             portal_offenders = ", ".join(
                 offender.display_name()
                 for offender in dedupe_offenders(primary_match.offenders)
             )
-            explanation.append(
+            match_lines.append(
                 f"Нарушители в БД портала (event_id={primary_match.event_id}): "
                 f"{portal_offenders or 'не указаны/не обнаружены'}"
             )
@@ -490,7 +484,7 @@ class CompareService:
         extracted_offenders_display = ", ".join(
             offender.display_name() for offender in extracted_offenders
         )
-        explanation.append(
+        summary_lines.append(
             f"Нарушители в сводке: {extracted_offenders_display or 'не указаны/не обнаружены'}"
         )
         if extracted_offenders:
@@ -502,35 +496,38 @@ class CompareService:
                 match_count = len(extracted_names & matched_names)
             total_count = len(extracted_names)
             if total_count:
-                explanation.append(
+                summary_lines.append(
                     f"Совпадение нарушителей: {round(overlap_value or 0.0, 2)}% "
                     f"(совпало {match_count} из {total_count})"
                 )
                 if match_count == 0:
-                    explanation.append(
+                    summary_lines.append(
                         "Возможная ошибка внесения нарушителей в БД (0% совпадения)"
                     )
         else:
-            explanation.append("Совпадение нарушителей: n/a")
+            summary_lines.append("Совпадение нарушителей: n/a")
         if (
             extracted.subdivision_text
             and extracted.subdivision_similarity is not None
             and extracted.subdivision_similarity < threshold
         ):
-            explanation.append("Подразделение не удалось определить (ниже порога)")
+            summary_lines.append("Подразделение не удалось определить (ниже порога)")
         if _show_debug_extract() and extracted.subdivision_text:
-            explanation.append(f"subdivision_raw: {extracted.subdivision_text}")
-            explanation.append(
+            summary_lines.append(f"subdivision_raw: {extracted.subdivision_text}")
+            summary_lines.append(
                 f"subdivision_norm: {normalize_subdivision(extracted.subdivision_text)}"
             )
         if offenders_status.diff:
             diff = offenders_status.diff
             if diff.get("missing"):
-                explanation.append(f"Отсутствуют в извлечении: {', '.join(diff['missing'])}")
-            if diff.get("extra"):
-                explanation.append(f"Лишние в извлечении: {', '.join(diff['extra'])}")
+                diff_lines.append(f"Отсутствуют в извлечении: {', '.join(diff['missing'])}")
             if diff.get("mismatch"):
-                explanation.append("; ".join(diff["mismatch"]))
+                diff_lines.append("; ".join(diff["mismatch"]))
+            if diff.get("extra"):
+                extra_lines.append(f"Лишние в извлечении: {', '.join(diff['extra'])}")
+
+        notes = summary_lines + diff_lines + extra_lines
+        explanation = match_lines + notes
 
         return {
             "extracted": {
@@ -559,5 +556,7 @@ class CompareService:
                 }
                 for match in (matches if matches else [])
             ],
+            "match_lines": match_lines,
+            "notes": notes,
             "explanation": explanation,
         }
