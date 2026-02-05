@@ -10,7 +10,7 @@ import string
 
 from sentence_transformers import SentenceTransformer, util
 
-from apps.reference.models import SubdivisionRef
+from apps.reference.models import EventType, EventTypePattern, SubdivisionRef
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +58,45 @@ def _resolve_model_path(
     return None
 
 
+def load_semantic_model(model_name: str) -> SentenceTransformer:
+    cache_dir = os.environ.get("SEMANTIC_MODEL_CACHE_DIR")
+    local_only = _is_truthy(os.environ.get("SEMANTIC_MODEL_LOCAL_ONLY"))
+    explicit_path = os.environ.get("SEMANTIC_MODEL_PATH")
+    lock_file = os.environ.get("SEMANTIC_MODEL_LOCK_FILE", "models/model_lock.json")
+    if explicit_path and Path(explicit_path).exists():
+        model_name = explicit_path
+    elif local_only:
+        resolved = _resolve_model_path(model_name, cache_dir, lock_file)
+        if resolved:
+            model_name = resolved
+    init_kwargs: dict[str, object] = {}
+    if cache_dir:
+        init_kwargs["cache_folder"] = cache_dir
+    if local_only:
+        init_kwargs["local_files_only"] = True
+    try:
+        return SentenceTransformer(model_name, **init_kwargs)
+    except OSError as exc:
+        if local_only:
+            message = (
+                f"Semantic model '{model_name}' is not downloaded locally. "
+                "Disable SEMANTIC_MODEL_LOCAL_ONLY or pre-download the model."
+            )
+            logger.error(message)
+            raise ValueError(message) from exc
+        raise
+
+
 @dataclass
 class SemanticMatch:
     subdivision: SubdivisionRef | None
+    similarity: float
+
+
+@dataclass
+class EventTypeSemanticMatch:
+    event_type: EventType | None
+    pattern: EventTypePattern | None
     similarity: float
 
 
@@ -157,34 +193,7 @@ class SubdivisionSemanticService:
     _cached_normalized_entries: list[tuple[str, SubdivisionRef]] | None = None
 
     def __init__(self, model_name: str) -> None:
-        cache_dir = os.environ.get("SEMANTIC_MODEL_CACHE_DIR")
-        local_only = _is_truthy(os.environ.get("SEMANTIC_MODEL_LOCAL_ONLY"))
-        explicit_path = os.environ.get("SEMANTIC_MODEL_PATH")
-        lock_file = os.environ.get(
-            "SEMANTIC_MODEL_LOCK_FILE", "models/model_lock.json"
-        )
-        if explicit_path and Path(explicit_path).exists():
-            model_name = explicit_path
-        elif local_only:
-            resolved = _resolve_model_path(model_name, cache_dir, lock_file)
-            if resolved:
-                model_name = resolved
-        init_kwargs: dict[str, object] = {}
-        if cache_dir:
-            init_kwargs["cache_folder"] = cache_dir
-        if local_only:
-            init_kwargs["local_files_only"] = True
-        try:
-            self.model = SentenceTransformer(model_name, **init_kwargs)
-        except OSError as exc:
-            if local_only:
-                message = (
-                    f"Semantic model '{model_name}' is not downloaded locally. "
-                    "Disable SEMANTIC_MODEL_LOCAL_ONLY or pre-download the model."
-                )
-                logger.error(message)
-                raise ValueError(message) from exc
-            raise
+        self.model = load_semantic_model(model_name)
         if self.__class__._cached_subdivisions is None:
             self.__class__._cached_subdivisions = list(SubdivisionRef.objects.all())
 
@@ -380,3 +389,72 @@ class SubdivisionSemanticService:
                 best_score,
             )
         return SemanticMatch(subdivision=best_match, similarity=best_score)
+
+
+class EventTypeSemanticService:
+    _cached_patterns: list[EventTypePattern] | None = None
+    _cached_embeddings: object | None = None
+    _cached_embedding_patterns: list[EventTypePattern] | None = None
+    _cached_embedding_texts: list[str] | None = None
+
+    def __init__(self, model_name: str) -> None:
+        self.model = load_semantic_model(model_name)
+        if self.__class__._cached_patterns is None:
+            self.__class__._cached_patterns = list(
+                EventTypePattern.objects.select_related("event_type")
+                .filter(is_active=True, event_type__is_active=True)
+            )
+
+        cached_patterns = self.__class__._cached_patterns
+        if (
+            self.__class__._cached_embeddings is None
+            or self.__class__._cached_embedding_patterns is None
+            or self.__class__._cached_embedding_texts is None
+        ):
+            texts: list[str] = []
+            patterns: list[EventTypePattern] = []
+            for pattern in cached_patterns:
+                if not pattern.pattern_text or not pattern.pattern_text.strip():
+                    continue
+                texts.append(pattern.pattern_text)
+                patterns.append(pattern)
+            if texts:
+                self.__class__._cached_embeddings = self.model.encode(
+                    texts, normalize_embeddings=True
+                )
+                self.__class__._cached_embedding_patterns = patterns
+                self.__class__._cached_embedding_texts = texts
+            else:
+                self.__class__._cached_embeddings = []
+                self.__class__._cached_embedding_patterns = []
+                self.__class__._cached_embedding_texts = []
+
+    def match(self, text: str) -> EventTypeSemanticMatch:
+        cached_patterns = self.__class__._cached_patterns or []
+        cached_embeddings = self.__class__._cached_embeddings or []
+        cached_embedding_patterns = self.__class__._cached_embedding_patterns or []
+        if not cached_patterns or len(cached_embeddings) == 0:
+            return EventTypeSemanticMatch(event_type=None, pattern=None, similarity=0.0)
+        if not text:
+            return EventTypeSemanticMatch(event_type=None, pattern=None, similarity=0.0)
+
+        candidate_embedding = self.model.encode(text, normalize_embeddings=True)
+        best_score = -1.0
+        best_pattern: EventTypePattern | None = None
+        for pattern, embedding in zip(cached_embedding_patterns, cached_embeddings):
+            score = float(util.cos_sim(candidate_embedding, embedding))
+            if score > best_score or (
+                score == best_score
+                and best_pattern is not None
+                and pattern.priority < best_pattern.priority
+            ):
+                best_score = score
+                best_pattern = pattern
+
+        if best_pattern is None:
+            return EventTypeSemanticMatch(event_type=None, pattern=None, similarity=0.0)
+        return EventTypeSemanticMatch(
+            event_type=best_pattern.event_type,
+            pattern=best_pattern,
+            similarity=best_score,
+        )
