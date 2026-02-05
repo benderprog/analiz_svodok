@@ -7,8 +7,7 @@ CREATE TABLE IF NOT EXISTS subdivision (
 CREATE TABLE IF NOT EXISTS events (
     id UUID PRIMARY KEY,
     date_detection TIMESTAMP NOT NULL,
-    find_subdivision_unit_id UUID NOT NULL REFERENCES subdivision(id),
-    event_type_name TEXT
+    find_subdivision_unit_id UUID NOT NULL REFERENCES subdivision(id)
 );
 
 CREATE TABLE IF NOT EXISTS offenders (
