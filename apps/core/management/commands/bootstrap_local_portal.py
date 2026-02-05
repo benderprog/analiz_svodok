@@ -47,7 +47,8 @@ class Command(BaseCommand):
             CREATE TABLE IF NOT EXISTS events (
                 id UUID PRIMARY KEY,
                 date_detection TIMESTAMP NULL,
-                find_subdivision_unit_id INTEGER NULL REFERENCES subdivision(id)
+                find_subdivision_unit_id INTEGER NULL REFERENCES subdivision(id),
+                event_type_name VARCHAR(255) NULL
             )
             """
         )
@@ -86,6 +87,9 @@ class Command(BaseCommand):
             "ALTER TABLE events ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT false"
         )
         cursor.execute(
+            "ALTER TABLE events ADD COLUMN IF NOT EXISTS event_type_name VARCHAR(255)"
+        )
+        cursor.execute(
             "ALTER TABLE offenders ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT false"
         )
 
@@ -111,15 +115,27 @@ class Command(BaseCommand):
         for event in events:
             cursor.execute(
                 """
-                INSERT INTO events (id, date_detection, find_subdivision_unit_id, is_test)
-                VALUES (%s, %s, %s, true)
+                INSERT INTO events (
+                    id,
+                    date_detection,
+                    find_subdivision_unit_id,
+                    event_type_name,
+                    is_test
+                )
+                VALUES (%s, %s, %s, %s, true)
                 ON CONFLICT (id)
                 DO UPDATE SET
                     date_detection = EXCLUDED.date_detection,
                     find_subdivision_unit_id = EXCLUDED.find_subdivision_unit_id,
+                    event_type_name = EXCLUDED.event_type_name,
                     is_test = EXCLUDED.is_test
                 """,
-                [event.id, event.date_detection, event.subdivision_id],
+                [
+                    event.id,
+                    event.date_detection,
+                    event.subdivision_id,
+                    event.event_type_name,
+                ],
             )
             cursor.execute(
                 "DELETE FROM offenders WHERE event_id = %s AND is_test = true",

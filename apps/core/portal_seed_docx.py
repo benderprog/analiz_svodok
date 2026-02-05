@@ -220,6 +220,7 @@ def build_seed_data(
                 subdivision_id=event_subdivision.id,
                 date_detection=event_timestamp,
                 offenders=offenders,
+                event_type_name=None,
             )
         )
 
@@ -289,7 +290,9 @@ def render_seed_sql(subdivisions: dict[int, str], events: list[EventSeed]) -> st
         lines.append("")
 
     if events:
-        lines.append("INSERT INTO events (id, date_detection, find_subdivision_unit_id, is_test)")
+        lines.append(
+            "INSERT INTO events (id, date_detection, find_subdivision_unit_id, event_type_name, is_test)"
+        )
         lines.append("VALUES")
         lines.extend(
             _render_values(
@@ -298,6 +301,7 @@ def render_seed_sql(subdivisions: dict[int, str], events: list[EventSeed]) -> st
                         event.id,
                         event.date_detection.strftime("%Y-%m-%d %H:%M:%S"),
                         event.subdivision_id,
+                        event.event_type_name,
                         True,
                     )
                     for event in events
@@ -307,6 +311,7 @@ def render_seed_sql(subdivisions: dict[int, str], events: list[EventSeed]) -> st
         lines.append("ON CONFLICT (id) DO UPDATE")
         lines.append("SET date_detection = EXCLUDED.date_detection,")
         lines.append("    find_subdivision_unit_id = EXCLUDED.find_subdivision_unit_id,")
+        lines.append("    event_type_name = EXCLUDED.event_type_name,")
         lines.append("    is_test = EXCLUDED.is_test;")
         lines.append("")
 
