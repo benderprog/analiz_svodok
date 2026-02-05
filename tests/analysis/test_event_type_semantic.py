@@ -1,5 +1,8 @@
 import numpy as np
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
 from apps.analysis.services import semantic
 from apps.analysis.services.semantic import EventTypeSemanticService
 from apps.reference.models import EventType, EventTypePattern
@@ -93,6 +96,26 @@ def test_event_type_match_with_patterns_does_not_crash(db, monkeypatch):
     assert match is not None
 
 
+def test_event_type_match_returns_when_similarity_above_threshold(db, monkeypatch):
+    monkeypatch.setattr(semantic, "load_semantic_model", lambda _: DummyModel())
+    monkeypatch.setattr(semantic.util, "cos_sim", _dummy_cos_sim)
+    EventTypeSemanticService._cached_patterns = None
+    EventTypeSemanticService._cached_embeddings = None
+    EventTypeSemanticService._cached_embedding_patterns = None
+    EventTypeSemanticService._cached_embedding_texts = None
+    EventTypeSemanticService._cached_fingerprint = None
+
+    event_type = EventType.objects.create(name="Тип D")
+    EventTypePattern.objects.create(event_type=event_type, pattern_text="пример D")
+
+    service = EventTypeSemanticService("dummy")
+
+    match = service.match("пример D")
+    assert match is not None
+    assert match.similarity >= 0.9
+    assert match.event_type == event_type
+
+
 def test_event_type_semantic_cache_invalidation(db, monkeypatch):
     monkeypatch.setattr(semantic, "load_semantic_model", lambda _: DummyModel())
     monkeypatch.setattr(semantic.util, "cos_sim", _dummy_cos_sim)
@@ -116,3 +139,26 @@ def test_event_type_semantic_cache_invalidation(db, monkeypatch):
 
     new_match = service.match("очень длинный паттерн")
     assert new_match.event_type == type_b
+
+
+def test_event_type_fingerprint_casts_uuid(db, monkeypatch):
+    monkeypatch.setattr(semantic, "load_semantic_model", lambda _: DummyModel())
+    EventTypeSemanticService._cached_patterns = None
+    EventTypeSemanticService._cached_embeddings = None
+    EventTypeSemanticService._cached_embedding_patterns = None
+    EventTypeSemanticService._cached_embedding_texts = None
+    EventTypeSemanticService._cached_fingerprint = None
+
+    event_type = EventType.objects.create(name="Тип E")
+    EventTypePattern.objects.create(event_type=event_type, pattern_text="пример E")
+
+    service = EventTypeSemanticService("dummy")
+    with CaptureQueriesContext(connection) as captured:
+        fingerprint = service._current_fingerprint()
+
+    assert fingerprint is not None
+    assert fingerprint[0] == 1
+    assert captured.captured_queries
+    sql = captured.captured_queries[-1]["sql"].upper()
+    assert "MAX(" in sql
+    assert "CAST" in sql
