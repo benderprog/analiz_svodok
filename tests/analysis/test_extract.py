@@ -26,6 +26,53 @@ def test_extract_offenders_does_not_crash():
     assert offender.raw is None or offender.raw in text
 
 
+def test_extract_birth_date_from_full_name():
+    service = ExtractService()
+    text = "Иванов Иван Иванович 05.05.1990"
+
+    result = service.extract(text)
+
+    assert result.offenders
+    offender = result.offenders[0]
+    assert offender.date_of_birth == datetime(1990, 5, 5).date()
+    assert offender.birth_year is None
+
+
+def test_extract_birth_year_requires_marker():
+    service = ExtractService()
+    text = "Иванова Мария Ивановна 1990"
+
+    result = service.extract(text)
+
+    assert result.offenders
+    offender = result.offenders[0]
+    assert offender.birth_year is None
+
+
+def test_extract_birth_year_with_marker():
+    service = ExtractService()
+    text = "Иванова Мария Ивановна 1990 г.р."
+
+    result = service.extract(text)
+
+    assert result.offenders
+    offender = result.offenders[0]
+    assert offender.birth_year == 1990
+    assert offender.date_of_birth is None
+
+
+def test_extract_initials_with_birth_year():
+    service = ExtractService()
+    text = "Иванов И.И. 1991 г.р."
+
+    result = service.extract(text)
+
+    assert result.offenders
+    offender = result.offenders[0]
+    assert offender.last_name == "Иванов"
+    assert offender.birth_year == 1991
+
+
 def test_extract_event_datetime_subdivision_offenders():
     service = ExtractService()
     text = (

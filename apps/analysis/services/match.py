@@ -18,6 +18,7 @@ class MatchService:
         settings_values = self._settings()
         threshold = settings_values["semantic_threshold_subdivision"]
         window = settings_values["time_window_minutes"]
+        offenders_min_overlap = settings_values["offenders_match_min_overlap"]
         subdivision_source = extracted.subdivision_text
         if not subdivision_source and extracted.raw_text:
             subdivision_source = extracted.raw_text[:200].strip()
@@ -34,7 +35,13 @@ class MatchService:
             extracted.subdivision_similarity = None
 
         candidates = self.portal_repo.fetch_candidates(extracted.timestamp, window)
-        result = self.compare_service.compare(extracted, candidates, threshold, window)
+        result = self.compare_service.compare(
+            extracted,
+            candidates,
+            threshold,
+            window,
+            offenders_min_overlap=offenders_min_overlap,
+        )
         if result["duplicates_count"] > 1:
             result["message"] = f"Найдено несколько записей: {result['duplicates_count']}"
         return result
@@ -42,7 +49,11 @@ class MatchService:
     def _settings(self) -> dict[str, float]:
         from apps.core.models import Setting
 
-        defaults = {"semantic_threshold_subdivision": 0.8, "time_window_minutes": 30}
+        defaults = {
+            "semantic_threshold_subdivision": 0.78,
+            "time_window_minutes": 10,
+            "offenders_match_min_overlap": 0.5,
+        }
         values = defaults.copy()
         for key, default in defaults.items():
             try:

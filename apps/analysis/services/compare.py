@@ -63,6 +63,14 @@ def normalize_offenders(values: list[Offender]) -> set[str]:
     return {offender_key(value) for value in dedupe_offenders(values)}
 
 
+def normalize_offender_names(values: list[Offender]) -> set[str]:
+    return {
+        normalize_name(offender_name(value))
+        for value in dedupe_offenders(values)
+        if offender_name(value)
+    }
+
+
 def jaccard_similarity(a: set[str], b: set[str]) -> float:
     if not a and not b:
         return 1.0
@@ -126,60 +134,112 @@ def evaluate_time(
 
 
 def offenders_diff(extracted: list[Offender], matched: list[Offender]) -> dict[str, list[str]]:
-    extracted_keys = {offender_key(offender): offender for offender in dedupe_offenders(extracted)}
-    matched_keys = {offender_key(offender): offender for offender in dedupe_offenders(matched)}
+    extracted_deduped = dedupe_offenders(extracted)
+    matched_deduped = dedupe_offenders(matched)
+    extracted_by_name: dict[str, list[Offender]] = {}
+    matched_by_name: dict[str, list[Offender]] = {}
+    for offender in extracted_deduped:
+        name = normalize_name(offender_name(offender))
+        extracted_by_name.setdefault(name, []).append(offender)
+    for offender in matched_deduped:
+        name = normalize_name(offender_name(offender))
+        matched_by_name.setdefault(name, []).append(offender)
+
     missing = [
         offender.display_name()
-        for key, offender in matched_keys.items()
-        if key not in extracted_keys
+        for name, offenders in matched_by_name.items()
+        if name not in extracted_by_name
+        for offender in offenders
     ]
     extra = [
         offender.display_name()
-        for key, offender in extracted_keys.items()
-        if key not in matched_keys
+        for name, offenders in extracted_by_name.items()
+        if name not in matched_by_name
+        for offender in offenders
     ]
     mismatch: list[str] = []
-    extracted_by_name: dict[str, set[str]] = {}
-    matched_by_name: dict[str, set[str]] = {}
-    for offender in extracted:
-        name = normalize_name(offender_name(offender))
-        extracted_by_name.setdefault(name, set()).add(offender_dob(offender) or "-")
-    for offender in matched:
-        name = normalize_name(offender_name(offender))
-        matched_by_name.setdefault(name, set()).add(offender_dob(offender) or "-")
     for name in sorted(set(extracted_by_name) & set(matched_by_name)):
-        if extracted_by_name[name] != matched_by_name[name]:
-            mismatch.append(
-                f"{name}: извлечено {sorted(extracted_by_name[name])}, "
-                f"в БД {sorted(matched_by_name[name])}"
-            )
-    return {
-        "missing": sorted(missing),
-        "extra": sorted(extra),
-        "mismatch": mismatch,
-    }
+        for extracted_offender in extracted_by_name[name]:
+            matched_offenders = matched_by_name[name]
+            dob_status = compare_offender_dob(extracted_offender, matched_offenders)
+            if dob_status == "missing_extracted":
+                mismatch.append(f"{name}: в сводке ДР не указана")
+            elif dob_status == "missing_portal":
+                mismatch.append(f"{name}: в БД ДР не указана")
+            elif dob_status == "mismatch":
+                extracted_label = offender_dob(extracted_offender) or "-"
+                matched_labels = sorted(
+                    {offender_dob(off) or "-" for off in matched_offenders}
+                )
+                mismatch.append(
+                    f"Несовпадение ДР для {name}: извлечено {extracted_label}, "
+                    f"в БД {matched_labels}"
+                )
+    return {"missing": sorted(missing), "extra": sorted(extra), "mismatch": mismatch}
+
+
+def compare_offender_dob(
+    extracted: Offender, matched_list: list[Offender]
+) -> str | None:
+    extracted_dob = offender_dob(extracted)
+    matched_dobs = [offender_dob(offender) for offender in matched_list]
+    if extracted_dob is None:
+        if any(dob for dob in matched_dobs):
+            return "missing_extracted"
+        return None
+    if not any(dob for dob in matched_dobs):
+        return "missing_portal"
+
+    if extracted.date_of_birth:
+        extracted_year = extracted.date_of_birth.year
+        for matched in matched_list:
+            if matched.date_of_birth and matched.date_of_birth == extracted.date_of_birth:
+                return None
+            if matched.birth_year and matched.birth_year == extracted_year:
+                return None
+    if extracted.birth_year:
+        extracted_year = extracted.birth_year
+        for matched in matched_list:
+            if matched.date_of_birth and matched.date_of_birth.year == extracted_year:
+                return None
+            if matched.birth_year and matched.birth_year == extracted_year:
+                return None
+    return "mismatch"
 
 
 def evaluate_offenders(extracted: list[Offender], matched: list[Offender]) -> AttributeStatus:
     if not extracted:
-        return AttributeStatus(label="offenders", status=None, percent=None, value="не определено")
+        return AttributeStatus(
+            label="offenders",
+            status=None,
+            percent=None,
+            value="не указаны/не обнаружены",
+        )
     extracted_deduped = dedupe_offenders(extracted)
     matched_deduped = dedupe_offenders(matched)
-    extracted_set = normalize_offenders(extracted_deduped)
-    matched_set = normalize_offenders(matched_deduped)
-    similarity = jaccard_similarity(extracted_set, matched_set)
-    if similarity == 1.0:
+    extracted_names = normalize_offender_names(extracted_deduped)
+    matched_names = normalize_offender_names(matched_deduped)
+    if not extracted_names:
+        return AttributeStatus(
+            label="offenders",
+            status=None,
+            percent=None,
+            value="не указаны/не обнаружены",
+        )
+    overlap = len(extracted_names & matched_names) / len(extracted_names)
+    diff = offenders_diff(extracted_deduped, matched_deduped)
+    if overlap == 1.0 and not any(diff.values()):
         status = "+"
-    elif similarity > 0:
+    elif overlap > 0:
         status = "!"
     else:
         status = "-"
     return AttributeStatus(
         label="offenders",
         status=status,
-        percent=round(similarity * 100, 2),
+        percent=round(overlap * 100, 2),
         value=", ".join(offender.display_name() for offender in extracted_deduped),
-        diff=offenders_diff(extracted_deduped, matched_deduped),
+        diff=diff,
     )
 
 
@@ -285,6 +345,7 @@ class CompareService:
         candidates: list[PortalEvent],
         threshold: float,
         window_minutes: int,
+        offenders_min_overlap: float = 0.5,
     ) -> dict:
         valid_subdivision = (
             extracted.subdivision_similarity is not None
@@ -292,33 +353,64 @@ class CompareService:
         )
         extracted_subdivision = extracted.subdivision_name if valid_subdivision else None
         extracted_offenders = dedupe_offenders(extracted.offenders)
-        extracted_offenders_norm = normalize_offenders(extracted_offenders)
+        extracted_offenders_names = normalize_offender_names(extracted_offenders)
 
         matches: list[PortalEvent] = []
+        match_metrics: dict[str, dict[str, float | int | bool]] = {}
         for candidate in candidates:
             candidate_offenders = dedupe_offenders(candidate.offenders)
-            time_match = (
-                extracted.timestamp_has_time
-                and extracted.timestamp
-                and candidate.date_detection == extracted.timestamp
-            )
+            time_match = False
+            time_delta = None
+            if extracted.timestamp_has_time and extracted.timestamp and candidate.date_detection:
+                delta = abs(
+                    (candidate.date_detection - extracted.timestamp).total_seconds()
+                ) / 60
+                time_delta = delta
+                time_match = delta <= window_minutes
             subdivision_match = bool(
                 extracted_subdivision
                 and candidate.subdivision_name == extracted_subdivision
             )
-            offenders_match = (
-                extracted_offenders_norm == normalize_offenders(candidate_offenders)
-            )
+            offenders_overlap = 0.0
+            offenders_match = False
+            if extracted_offenders_names:
+                candidate_names = normalize_offender_names(candidate_offenders)
+                if extracted_offenders_names:
+                    offenders_overlap = len(
+                        extracted_offenders_names & candidate_names
+                    ) / len(extracted_offenders_names)
+                offenders_match = offenders_overlap >= offenders_min_overlap
             if rule_two_of_three(time_match, subdivision_match, offenders_match):
                 candidate.offenders = candidate_offenders
                 matches.append(candidate)
+                match_metrics[candidate.event_id] = {
+                    "count_true": sum([time_match, subdivision_match, offenders_match]),
+                    "time_delta": time_delta if time_delta is not None else float("inf"),
+                    "subdivision_similarity": extracted.subdivision_similarity or 0.0,
+                    "offenders_overlap": offenders_overlap,
+                    "time_match": time_match,
+                    "subdivision_match": subdivision_match,
+                    "offenders_match": offenders_match,
+                }
 
         found = bool(matches)
-        primary_match = matches[0] if matches else None
+        primary_match = None
         duplicates_count = len(matches)
+        if matches:
+            primary_match = sorted(
+                matches,
+                key=lambda candidate: (
+                    -int(match_metrics[candidate.event_id]["count_true"]),
+                    match_metrics[candidate.event_id]["time_delta"],
+                    -float(match_metrics[candidate.event_id]["subdivision_similarity"]),
+                    -float(match_metrics[candidate.event_id]["offenders_overlap"]),
+                ),
+            )[0]
 
         time_candidate = None
-        if extracted.timestamp and extracted.timestamp_has_time and candidates:
+        if primary_match:
+            time_candidate = primary_match
+        elif extracted.timestamp and extracted.timestamp_has_time and candidates:
             time_candidate = min(
                 candidates,
                 key=lambda candidate: abs(
@@ -339,7 +431,10 @@ class CompareService:
                 time_candidate = None
 
         time_status = evaluate_time(
-            extracted.timestamp, time_candidate.date_detection if time_candidate else None, window_minutes, extracted.timestamp_has_time
+            extracted.timestamp,
+            time_candidate.date_detection if time_candidate else None,
+            window_minutes,
+            extracted.timestamp_has_time,
         )
         subdivision_status = evaluate_subdivision(
             extracted.subdivision_name,
@@ -362,6 +457,61 @@ class CompareService:
         highlighted_text = highlight_text(extracted.raw_text, highlights)
 
         explanation: list[str] = []
+        if primary_match:
+            metrics = match_metrics.get(primary_match.event_id, {})
+            matched_flags = []
+            if metrics.get("time_match"):
+                matched_flags.append("time")
+            if metrics.get("subdivision_match"):
+                matched_flags.append("subdivision")
+            if metrics.get("offenders_match"):
+                matched_flags.append("offenders")
+            explanation.append(f"Выбранный event_id: {primary_match.event_id}")
+            explanation.append(
+                "Сработали признаки: " + (", ".join(matched_flags) or "нет")
+            )
+            if metrics.get("time_delta") is not None and metrics.get("time_delta") != float("inf"):
+                explanation.append(
+                    f"Δt: {round(float(metrics['time_delta']))} мин"
+                )
+            if extracted.subdivision_similarity is not None:
+                explanation.append(
+                    f"subdivision_similarity: {round(extracted.subdivision_similarity, 3)}"
+                )
+            portal_offenders = ", ".join(
+                offender.display_name()
+                for offender in dedupe_offenders(primary_match.offenders)
+            )
+            explanation.append(
+                f"Нарушители в БД портала (event_id={primary_match.event_id}): "
+                f"{portal_offenders or 'не указаны/не обнаружены'}"
+            )
+
+        extracted_offenders_display = ", ".join(
+            offender.display_name() for offender in extracted_offenders
+        )
+        explanation.append(
+            f"Нарушители в сводке: {extracted_offenders_display or 'не указаны/не обнаружены'}"
+        )
+        if extracted_offenders:
+            overlap_value = offenders_status.percent
+            match_count = 0
+            extracted_names = normalize_offender_names(extracted_offenders)
+            matched_names = normalize_offender_names(primary_match.offenders) if primary_match else set()
+            if extracted_names:
+                match_count = len(extracted_names & matched_names)
+            total_count = len(extracted_names)
+            if total_count:
+                explanation.append(
+                    f"Совпадение нарушителей: {round(overlap_value or 0.0, 2)}% "
+                    f"(совпало {match_count} из {total_count})"
+                )
+                if match_count == 0:
+                    explanation.append(
+                        "Возможная ошибка внесения нарушителей в БД (0% совпадения)"
+                    )
+        else:
+            explanation.append("Совпадение нарушителей: n/a")
         if (
             extracted.subdivision_text
             and extracted.subdivision_similarity is not None
@@ -380,7 +530,7 @@ class CompareService:
             if diff.get("extra"):
                 explanation.append(f"Лишние в извлечении: {', '.join(diff['extra'])}")
             if diff.get("mismatch"):
-                explanation.append("Несовпадения по ДР: " + "; ".join(diff["mismatch"]))
+                explanation.append("; ".join(diff["mismatch"]))
 
         return {
             "extracted": {
@@ -397,6 +547,7 @@ class CompareService:
             "duplicates_count": duplicates_count,
             "matches": [
                 {
+                    "event_id": match.event_id,
                     "date_detection": match.date_detection,
                     "subdivision_name": match.subdivision_name,
                     "subdivision_short_name": match.subdivision_short_name,

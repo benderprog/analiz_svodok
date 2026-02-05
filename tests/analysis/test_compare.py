@@ -88,7 +88,7 @@ def test_compare_offenders_diff_and_status():
     result = CompareService().compare(extracted_event, [portal_event], 0.8, 30)
     offenders_status = result["attributes"]["offenders"]
     assert offenders_status["status"] == "!"
-    assert "Несовпадения" in " ".join(result["explanation"])
+    assert "Несовпадение ДР" in " ".join(result["explanation"])
 
 
 def test_dedupe_offenders_in_output():
