@@ -99,6 +99,14 @@ python manage.py sync_divisions --file configs/divisions.yaml
 `seed.sh` поднимает локальные сервисы, выполняет миграции приложения и
 заполняет тестовые данные как в БД приложения, так и в БД портала.
 
+Если портал развёрнут локально без Docker, используйте:
+```bash
+./scripts/seed_local_portal.sh
+```
+Скрипт применяет `seed/portal_schema.sql`, а затем наполняет БД портала
+данными из DOCX (если есть `fixtures/test_svodka_semantic3.docx` или любой
+`fixtures/*.docx`) либо из `seed/portal_data.sql`.
+
 Ожидаемый результат — успешный матчинг по примерам:
 ```text
 службой ПОГЗ №2 (с. Васильки) выявлены...
