@@ -9,7 +9,10 @@ from apps.analysis.services.extract import ExtractService
 from apps.analysis.services.match import MatchService
 from apps.analysis.services.portal_repo import PortalRepository
 from apps.analysis.services.result_store import ResultStore
-from apps.analysis.services.semantic import SubdivisionSemanticService
+from apps.analysis.services.semantic import (
+    EventTypeSemanticService,
+    SubdivisionSemanticService,
+)
 
 
 @shared_task(bind=True)
@@ -21,7 +24,8 @@ def analyze_docx(self, job_id: str, file_path: str) -> None:
     extract_service = ExtractService()
     semantic_service = SubdivisionSemanticService(settings.SEMANTIC_MODEL_NAME)
     portal_repo = PortalRepository()
-    match_service = MatchService(semantic_service, portal_repo)
+    event_type_service = EventTypeSemanticService(settings.SEMANTIC_MODEL_NAME)
+    match_service = MatchService(semantic_service, portal_repo, event_type_service)
 
     paragraphs = ingest.read_paragraphs(file_path)
     results = []

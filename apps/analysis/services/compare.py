@@ -303,6 +303,7 @@ def serialize_match(result: MatchResult) -> dict:
                 "subdivision_name": match.subdivision_name,
                 "subdivision_short_name": match.subdivision_short_name,
                 "subdivision_full_name": match.subdivision_full_name,
+                "event_type_name": match.event_type_name,
                 "offenders": [
                     offender.display_name()
                     for offender in dedupe_offenders(match.offenders)
@@ -542,6 +543,7 @@ class CompareService:
             },
             "event_found": found,
             "duplicates_count": duplicates_count,
+            "primary_match_id": primary_match.event_id if primary_match else None,
             "matches": [
                 {
                     "event_id": match.event_id,
@@ -549,6 +551,7 @@ class CompareService:
                     "subdivision_name": match.subdivision_name,
                     "subdivision_short_name": match.subdivision_short_name,
                     "subdivision_full_name": match.subdivision_full_name,
+                    "event_type_name": match.event_type_name,
                     "offenders": [
                         offender.display_name()
                         for offender in dedupe_offenders(match.offenders)

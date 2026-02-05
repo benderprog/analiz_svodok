@@ -18,7 +18,7 @@ def test_match_to_span_with_re_match():
 
 def test_extract_offenders_does_not_crash():
     service = ExtractService()
-    text = "Иванов Иван Иванович 01.01.1990 совершил правонарушение."
+    text = "Иванов Иван Иванович 01.01.1990 совершил событие."
     result = service.extract(text)
 
     assert result.offenders
@@ -163,7 +163,7 @@ def test_extract_subdivision_text_from_opk_marker():
 
 def test_extract_subdivision_text_from_pz_marker():
     service = ExtractService()
-    text = "В 10.35 на участке ПЗ №2 выявлено нарушение."
+    text = "В 10.35 на участке ПЗ №2 выявлено событие."
 
     result = service.extract(text)
 

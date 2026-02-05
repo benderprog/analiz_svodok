@@ -6,6 +6,7 @@ from django.db import connections
 
 from apps.analysis.dto import Offender, PortalEvent
 from apps.analysis.services.portal_queries import get_portal_query
+from apps.analysis.models import Event
 
 
 class PortalRepository:
@@ -62,6 +63,10 @@ class PortalRepository:
         for event_id in events:
             offenders = self._fetch_offenders(event_id)
             events[event_id].offenders.extend(offenders)
+        event_types = self._fetch_event_types(set(events.keys()))
+        for event_id, event_type_name in event_types.items():
+            if event_id in events:
+                events[event_id].event_type_name = event_type_name
         return list(events.values())
 
     def _fetch_subdivisions(self, subdivision_ids: set[str]) -> dict[str, str]:
@@ -91,3 +96,15 @@ class PortalRepository:
                 )
                 for first, middle, last, dob in cursor.fetchall()
             ]
+
+    def _fetch_event_types(self, event_ids: set[str]) -> dict[str, str | None]:
+        if not event_ids:
+            return {}
+        events = (
+            Event.objects.select_related("event_type")
+            .filter(id__in=event_ids)
+        )
+        return {
+            str(event.id): event.event_type.name if event.event_type else None
+            for event in events
+        }
