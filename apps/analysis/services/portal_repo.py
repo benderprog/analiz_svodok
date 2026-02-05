@@ -6,7 +6,6 @@ from django.db import connections
 
 from apps.analysis.dto import Offender, PortalEvent
 from apps.analysis.services.portal_queries import get_portal_query
-from apps.analysis.models import Event
 
 
 class PortalRepository:
@@ -100,11 +99,7 @@ class PortalRepository:
     def _fetch_event_types(self, event_ids: set[str]) -> dict[str, str | None]:
         if not event_ids:
             return {}
-        events = (
-            Event.objects.select_related("event_type")
-            .filter(id__in=event_ids)
-        )
-        return {
-            str(event.id): event.event_type.name if event.event_type else None
-            for event in events
-        }
+        fetch_event_types_query = get_portal_query("fetch_event_types")
+        with connections["portal"].cursor() as cursor:
+            cursor.execute(fetch_event_types_query, {"event_ids": list(event_ids)})
+            return {str(event_id): event_type for event_id, event_type in cursor.fetchall()}
