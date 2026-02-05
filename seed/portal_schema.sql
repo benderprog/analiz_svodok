@@ -1,21 +1,23 @@
-CREATE TABLE IF NOT EXISTS subdivision (
+DROP VIEW IF EXISTS portal_subdivisions CASCADE;
+DROP TABLE IF EXISTS portal_events CASCADE;
+
+CREATE TABLE portal_events (
     id UUID PRIMARY KEY,
-    fullname TEXT NOT NULL,
-    is_test BOOLEAN NOT NULL DEFAULT true
+    detected_at TIMESTAMP NOT NULL,
+    subdivision_id UUID NOT NULL,
+    subdivision_fullname TEXT NOT NULL,
+    event_type_id UUID NULL,
+    event_type_name TEXT NULL,
+    raw_text TEXT NOT NULL,
+    offenders JSONB NOT NULL DEFAULT '[]',
+    is_test BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS events (
-    id UUID PRIMARY KEY,
-    date_detection TIMESTAMP NOT NULL,
-    find_subdivision_unit_id UUID NOT NULL REFERENCES subdivision(id)
-);
+CREATE INDEX idx_portal_events_detected_at ON portal_events (detected_at);
+CREATE INDEX idx_portal_events_subdivision_id ON portal_events (subdivision_id);
 
-CREATE TABLE IF NOT EXISTS offenders (
-    id UUID PRIMARY KEY,
-    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    first_name TEXT NOT NULL,
-    middle_name TEXT NOT NULL DEFAULT '',
-    last_name TEXT NOT NULL,
-    date_of_birth DATE,
-    CONSTRAINT uq_offenders_key UNIQUE (event_id, first_name, middle_name, last_name, date_of_birth)
-);
+CREATE OR REPLACE VIEW portal_subdivisions AS
+SELECT DISTINCT subdivision_id, subdivision_fullname
+FROM portal_events;

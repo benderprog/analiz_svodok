@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 from django.conf import settings
 
-REQUIRED_QUERY_KEYS = {"find_candidates", "fetch_offenders", "fetch_subdivision"}
+REQUIRED_QUERY_KEYS = {"find_candidates"}
 
 
 def _resolve_config_path(path_value: str) -> Path:

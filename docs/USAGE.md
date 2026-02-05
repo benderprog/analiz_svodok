@@ -103,22 +103,29 @@ python manage.py sync_divisions --file configs/divisions.yaml
 ```bash
 ./scripts/seed_local_portal.sh
 ```
-Скрипт применяет `seed/portal_schema.sql`, а затем наполняет БД портала
-данными из DOCX (если есть `fixtures/test_svodka_semantic3.docx` или любой
-`fixtures/*.docx`) либо из `seed/portal_data.sql`.
-Для локальных настроек скрипт сначала читает `.env.local` (если есть), затем `.env`.
+Скрипт **полностью пересоздаёт** схему портальной БД из `seed/portal_schema.sql`,
+а затем наполняет `portal_events` данными из DOCX (если есть
+`fixtures/test_svodka_semantic3.docx` или любой `fixtures/*.docx`) либо из
+`seed/portal_data.sql`. Для локальных настроек скрипт сначала читает `.env.local`
+(если есть), затем `.env`.
 
-### Локальное наполнение портальной БД
-Пример полного цикла с очисткой схемы и проверкой:
+### Reset портальной БД локально
+Пример полного цикла с пересозданием схемы и проверкой:
 ```bash
 source .env.local
-./scripts/seed_local_portal.sh --reset
+./scripts/seed_local_portal.sh
 ./scripts/verify_local_portal.sh
 ```
 
-Все идентификаторы в тестовой портальной БД — **UUID** (включая `subdivision.id`,
-`events.id` и `offenders.id`). В `seed/portal_data.sql` используются фиксированные UUID
-для детерминированных прогонов.
+Нужные переменные:
+- `PORTAL_HOST`, `PORTAL_PORT`, `PORTAL_DB`, `PORTAL_USER`, `PORTAL_PASSWORD`.
+
+Что должно появиться:
+- таблица `portal_events` с тестовыми событиями;
+- `offenders` в JSONB;
+- список подразделений можно получить через `SELECT DISTINCT subdivision_id, subdivision_fullname FROM portal_events`.
+
+В `seed/portal_data.sql` используются фиксированные UUID для детерминированных прогонов.
 
 Ожидаемый результат — успешный матчинг по примерам:
 ```text
@@ -134,6 +141,28 @@ from apps.analysis.services.semantic import SubdivisionSemanticService
 svc = SubdivisionSemanticService("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 svc.match("службой ПОГЗ №2 в с. Васильки ...")
 ```
+
+### Portal admin (TEST)
+**Временная тестовая функция. По умолчанию выключена.**
+
+Включение (только для локальной отладки):
+```bash
+export DJANGO_DEBUG=true
+export PORTAL_ADMIN_ENABLED=1
+```
+После этого в Django-admin появится раздел **TEST/PORTAL: события** для CRUD-тестов.
+Чтобы отключить — уберите `PORTAL_ADMIN_ENABLED` или выключите `DJANGO_DEBUG`.
+
+### Как проверить вручную
+1) Сбросьте портал:
+   ```bash
+   ./scripts/seed_local_portal.sh
+   ```
+2) Запустите приложение и celery (локально или через docker).
+3) Запустите анализ DOCX и убедитесь, что:
+   - события находятся по времени;
+   - offenders читаются из JSONB и сравниваются по году/дате;
+   - тип события показывает «не задан / mismatch» при расхождении.
 
 ## Типовые ошибки и что делать
 - **Не определилось подразделение**
@@ -162,5 +191,5 @@ docker compose -f docker-compose.offline.yml run --rm web \
 
 ## UUID в тестовой БД портала
 - В тестовой БД портала все ключевые идентификаторы используют UUID
-  (`subdivision.id`, `events.id`, `offenders.id`, а также все FK ссылки).
+  (`portal_events.id`, `portal_events.subdivision_id`, `portal_events.event_type_id`).
 - В `seed/portal_data.sql` применяются фиксированные UUID для детерминированных прогонов.

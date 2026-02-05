@@ -29,8 +29,12 @@ class OffenderSeed:
 class EventSeed:
     id: str
     subdivision_id: int
+    subdivision_fullname: str
     date_detection: datetime
     offenders: list[OffenderSeed]
+    raw_text: str
+    event_type_id: str | None = None
+    event_type_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,11 +45,13 @@ class DocxSeed:
 
 def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], list[EventSeed], list[DocxSeed]]:
     subdivisions = _load_divisions_from_yaml()
+    subdivision_lookup = {subdivision.id: subdivision.fullname for subdivision in subdivisions}
 
     base_events = [
         EventSeed(
             id="11111111-1111-1111-1111-111111111111",
             subdivision_id=1101,
+            subdivision_fullname=subdivision_lookup[1101],
             date_detection=datetime(2024, 1, 10, 12, 0),
             offenders=[
                 OffenderSeed(
@@ -55,10 +61,14 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1990, 5, 5),
                 )
             ],
+            raw_text="10.01.2024 12:00 службой ПОГЗ №2 (с. Васильки) выявлены лица.",
+            event_type_id="10000000-0000-0000-0000-000000000001",
+            event_type_name="Незаконный переход",
         ),
         EventSeed(
             id="22222222-2222-2222-2222-222222222222",
             subdivision_id=1102,
+            subdivision_fullname=subdivision_lookup[1102],
             date_detection=datetime(2024, 1, 11, 9, 30),
             offenders=[
                 OffenderSeed(
@@ -68,10 +78,14 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1985, 3, 12),
                 )
             ],
+            raw_text="11.01.2024 09:30 на посту ОПК «Центральное» задержан гражданин.",
+            event_type_id="10000000-0000-0000-0000-000000000002",
+            event_type_name="Попытка пересечения",
         ),
         EventSeed(
             id="33333333-3333-3333-3333-333333333333",
             subdivision_id=1202,
+            subdivision_fullname=subdivision_lookup[1202],
             date_detection=datetime(2024, 1, 12, 14, 20),
             offenders=[
                 OffenderSeed(
@@ -81,10 +95,12 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1992, 7, 1),
                 )
             ],
+            raw_text="12.01.2024 14:20 в районе ПОГК «Северная» зафиксировано сообщение.",
         ),
         EventSeed(
             id="44444444-4444-4444-4444-444444444444",
             subdivision_id=1201,
+            subdivision_fullname=subdivision_lookup[1201],
             date_detection=datetime(2024, 1, 13, 16, 45),
             offenders=[
                 OffenderSeed(
@@ -94,10 +110,14 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1978, 9, 9),
                 )
             ],
+            raw_text="13.01.2024 16:45 службой ПОГЗ №1 выявлены лица.",
+            event_type_id="10000000-0000-0000-0000-000000000003",
+            event_type_name="Наряд по сигналу",
         ),
         EventSeed(
             id="55555555-5555-5555-5555-555555555555",
             subdivision_id=1301,
+            subdivision_fullname=subdivision_lookup[1301],
             date_detection=datetime(2024, 1, 14, 10, 15),
             offenders=[
                 OffenderSeed(
@@ -107,10 +127,14 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1995, 12, 30),
                 )
             ],
+            raw_text="14.01.2024 10:15 ПОГЗ №3 выявлено совпадение.",
+            event_type_id="10000000-0000-0000-0000-000000000004",
+            event_type_name="Контрольный осмотр",
         ),
         EventSeed(
             id="66666666-6666-6666-6666-666666666666",
             subdivision_id=1101,
+            subdivision_fullname=subdivision_lookup[1101],
             date_detection=datetime(2024, 1, 14, 10, 15),
             offenders=[
                 OffenderSeed(
@@ -120,6 +144,8 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1995, 12, 30),
                 )
             ],
+            raw_text="14.01.2024 10:15 дублирующая запись для проверки дублей.",
+            event_type_name="Патрулирование",
         ),
     ]
 
@@ -178,6 +204,7 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             EventSeed(
                 id=_build_event_uuid(index),
                 subdivision_id=subdivisions[index % len(subdivisions)].id,
+                subdivision_fullname=subdivisions[index % len(subdivisions)].fullname,
                 date_detection=start_time + timedelta(minutes=index * 5),
                 offenders=[
                     OffenderSeed(
@@ -187,6 +214,8 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                         date_of_birth=date(1990, 1, 1),
                     )
                 ],
+                raw_text=f"Тестовое событие {index + 1}.",
+                event_type_name="Тестовый сценарий",
             )
         )
 
@@ -195,6 +224,10 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
 
 def _build_event_uuid(index: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"portal-event-{index}"))
+
+
+def build_subdivision_uuid(subdivision_id: int) -> str:
+    return f"00000000-0000-0000-0000-{subdivision_id:012d}"
 
 
 def _load_divisions_from_yaml() -> list[SubdivisionSeed]:

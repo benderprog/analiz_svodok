@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+import json
 from pathlib import Path
 import hashlib
 import re
@@ -15,6 +16,7 @@ from apps.core.management.portal_seed import (
     EventSeed,
     OffenderSeed,
     SubdivisionSeed,
+    build_subdivision_uuid,
     _build_full_name,
     _build_short_name,
 )
@@ -42,6 +44,11 @@ _TIME_DATE_RE = re.compile(
 class DivisionAlias:
     alias_normalized: str
     subdivision: SubdivisionSeed
+
+
+@dataclass(frozen=True)
+class SqlFragment:
+    value: str
 
 
 def read_docx_paragraphs(path: Path, *, allow_missing: bool = False, limit: int = MAX_DOCX_EVENTS) -> list[str]:
@@ -218,8 +225,10 @@ def build_seed_data(
             EventSeed(
                 id=event_id,
                 subdivision_id=event_subdivision.id,
+                subdivision_fullname=event_subdivision.fullname,
                 date_detection=event_timestamp,
                 offenders=offenders,
+                raw_text=paragraph,
             )
         )
 
@@ -272,24 +281,13 @@ def build_stable_subdivision_id(fullname: str) -> int:
 
 def render_seed_sql(subdivisions: dict[int, str], events: list[EventSeed]) -> str:
     lines: list[str] = []
-    if subdivisions:
-        lines.append("INSERT INTO subdivision (id, fullname, is_test)")
-        lines.append("VALUES")
-        lines.extend(
-            _render_values(
-                [
-                    (subdivision_id, subdivision_name, True)
-                    for subdivision_id, subdivision_name in subdivisions.items()
-                ]
-            )
-        )
-        lines.append("ON CONFLICT (id) DO UPDATE")
-        lines.append("SET fullname = EXCLUDED.fullname,")
-        lines.append("    is_test = EXCLUDED.is_test;")
-        lines.append("")
-
     if events:
-        lines.append("INSERT INTO events (id, date_detection, find_subdivision_unit_id, is_test)")
+        lines.append(
+            "INSERT INTO portal_events ("
+            "id, detected_at, subdivision_id, subdivision_fullname, event_type_id, event_type_name, "
+            "raw_text, offenders, is_test"
+            ")"
+        )
         lines.append("VALUES")
         lines.extend(
             _render_values(
@@ -297,7 +295,14 @@ def render_seed_sql(subdivisions: dict[int, str], events: list[EventSeed]) -> st
                     (
                         event.id,
                         event.date_detection.strftime("%Y-%m-%d %H:%M:%S"),
-                        event.subdivision_id,
+                        build_subdivision_uuid(event.subdivision_id),
+                        event.subdivision_fullname,
+                        event.event_type_id,
+                        event.event_type_name,
+                        event.raw_text,
+                        SqlFragment(
+                            _jsonb_literal(json.dumps(_render_offenders(event.offenders), ensure_ascii=False))
+                        ),
                         True,
                     )
                     for event in events
@@ -305,44 +310,14 @@ def render_seed_sql(subdivisions: dict[int, str], events: list[EventSeed]) -> st
             )
         )
         lines.append("ON CONFLICT (id) DO UPDATE")
-        lines.append("SET date_detection = EXCLUDED.date_detection,")
-        lines.append("    find_subdivision_unit_id = EXCLUDED.find_subdivision_unit_id,")
+        lines.append("SET detected_at = EXCLUDED.detected_at,")
+        lines.append("    subdivision_id = EXCLUDED.subdivision_id,")
+        lines.append("    subdivision_fullname = EXCLUDED.subdivision_fullname,")
+        lines.append("    event_type_id = EXCLUDED.event_type_id,")
+        lines.append("    event_type_name = EXCLUDED.event_type_name,")
+        lines.append("    raw_text = EXCLUDED.raw_text,")
+        lines.append("    offenders = EXCLUDED.offenders,")
         lines.append("    is_test = EXCLUDED.is_test;")
-        lines.append("")
-
-        offenders_rows: list[tuple[str, str, str | None, str, date | None, bool]] = []
-        seen: set[tuple[str, str, str | None, str, date | None]] = set()
-        for event in events:
-            for offender in event.offenders:
-                key = (
-                    event.id,
-                    offender.first_name,
-                    offender.middle_name,
-                    offender.last_name,
-                    offender.date_of_birth,
-                )
-                if key in seen:
-                    continue
-                seen.add(key)
-                offenders_rows.append(
-                    (
-                        event.id,
-                        offender.first_name,
-                        offender.middle_name,
-                        offender.last_name,
-                        offender.date_of_birth,
-                        True,
-                    )
-                )
-
-        if offenders_rows:
-            lines.append("INSERT INTO offenders (event_id, first_name, middle_name, last_name, date_of_birth, is_test)")
-            lines.append("VALUES")
-            lines.extend(_render_values(offenders_rows))
-            lines.append(
-                "ON CONFLICT (event_id, first_name, middle_name, last_name, date_of_birth)"
-            )
-            lines.append("DO NOTHING;")
     if not lines:
         lines.append("-- No events found in DOCX.")
     return "\n".join(lines).strip() + "\n"
@@ -357,6 +332,8 @@ def _render_values(rows: list[tuple[object, ...]]) -> list[str]:
 
 
 def _sql_literal(value: object) -> str:
+    if isinstance(value, SqlFragment):
+        return value.value
     if value is None:
         return "NULL"
     if isinstance(value, bool):
@@ -367,6 +344,27 @@ def _sql_literal(value: object) -> str:
         escaped = value.replace("'", "''")
         return f"'{escaped}'"
     return str(value)
+
+
+def _jsonb_literal(value: str) -> str:
+    escaped = value.replace("'", "''")
+    return f"'{escaped}'::jsonb"
+
+
+def _render_offenders(offenders: list[OffenderSeed]) -> list[dict[str, object]]:
+    rendered: list[dict[str, object]] = []
+    for offender in offenders:
+        payload: dict[str, object] = {
+            "last_name": offender.last_name,
+            "first_name": offender.first_name,
+            "middle_name": offender.middle_name,
+        }
+        if offender.date_of_birth:
+            payload["birth_date"] = offender.date_of_birth.isoformat()
+        if offender.birth_year:
+            payload["birth_year"] = offender.birth_year
+        rendered.append(payload)
+    return rendered
 
 
 def generate_portal_seed_from_docx(docx_path: Path, output_path: Path, divisions_path: Path) -> None:

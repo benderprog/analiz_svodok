@@ -33,6 +33,18 @@
 
 **SQL-контракт:**
 - `PORTAL_QUERY_CONFIG_PATH` — путь к `configs/portal_queries.yaml`.
+- `PORTAL_ADMIN_ENABLED` — включение тестового CRUD для портальной БД (только при `DJANGO_DEBUG=true`).
+
+## Portal admin (TEST)
+**Временная тестовая функция. По умолчанию выключена.**
+
+Чтобы включить:
+```bash
+export DJANGO_DEBUG=true
+export PORTAL_ADMIN_ENABLED=1
+```
+В админке появится раздел **TEST/PORTAL: события** (CRUD тестовых записей).
+Чтобы отключить — уберите `PORTAL_ADMIN_ENABLED` или выключите `DJANGO_DEBUG`.
 
 ## Порог семантики и окно времени
 Порог семантики и окно времени хранятся в таблице настроек приложения:
@@ -90,8 +102,6 @@ python manage.py import_event_types_xlsx --path /path/to/file.xlsx --dry-run
 
 Структура:
 - `find_candidates` — поиск событий по интервалу времени (используются параметры `ts_from`, `ts_to`, `ts_exact`, `limit`).
-- `fetch_subdivision` — выборка подразделения по `id`.
-- `fetch_offenders` — выборка нарушителей по `event_id`.
 
 ### Адаптация под другую схему БД
 1) Замените имена таблиц и полей в SQL.
@@ -105,9 +115,9 @@ docker compose -f docker-compose.offline.yml exec -T portal-postgres \
 ```
 Пример запроса:
 ```sql
-SELECT id, date_detection
-FROM events
-ORDER BY date_detection DESC
+SELECT id, detected_at
+FROM portal_events
+ORDER BY detected_at DESC
 LIMIT 5;
 ```
 

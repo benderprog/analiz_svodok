@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-reset_schema=false
 for arg in "$@"; do
   case "$arg" in
     --reset)
-      reset_schema=true
+      echo "Flag --reset is deprecated: schema reset is always performed." >&2
       ;;
     *)
       echo "Unknown argument: $arg" >&2
@@ -32,20 +31,6 @@ fi
 PORTAL_HOST="${PORTAL_HOST:-127.0.0.1}"
 PORTAL_PORT="${PORTAL_PORT:-5432}"
 
-if [[ "$reset_schema" == "true" ]]; then
-  echo "Resetting portal schema..."
-  PGPASSWORD="$PORTAL_PASSWORD" psql \
-    -h "$PORTAL_HOST" \
-    -p "$PORTAL_PORT" \
-    -U "$PORTAL_USER" \
-    -d "$PORTAL_DB" \
-    -v ON_ERROR_STOP=1 <<'SQL'
-DROP TABLE IF EXISTS offenders;
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS subdivision;
-SQL
-fi
-
 seed_sql="seed/portal_data.sql"
 docx_path=""
 if [[ -f fixtures/test_svodka_semantic3.docx ]]; then
@@ -68,7 +53,7 @@ if [[ -n "$docx_path" ]]; then
 fi
 
 if [[ -f seed/portal_schema.sql ]]; then
-  echo "Applying portal schema..."
+  echo "Resetting and applying portal schema..."
   PGPASSWORD="$PORTAL_PASSWORD" psql \
     -h "$PORTAL_HOST" \
     -p "$PORTAL_PORT" \
@@ -91,6 +76,16 @@ else
   echo "Seed SQL not found; skipping portal data seed." >&2
   exit 1
 fi
+
+echo "Portal events count:"
+PGPASSWORD="$PORTAL_PASSWORD" psql \
+  -h "$PORTAL_HOST" \
+  -p "$PORTAL_PORT" \
+  -U "$PORTAL_USER" \
+  -d "$PORTAL_DB" \
+  -v ON_ERROR_STOP=1 \
+  -t -A \
+  -c "SELECT count(*) FROM portal_events;"
 
 if [[ -f scripts/verify_local_portal.sh ]]; then
   echo "Verifying local portal seed..."

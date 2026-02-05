@@ -132,8 +132,6 @@ docker compose -f docker-compose.offline.yml run --rm web \
 
 Что именно менять:
 - `find_candidates` — выборка событий по времени (`ts_from`, `ts_to`, `ts_exact`, `limit`).
-- `fetch_subdivision` — получение названия подразделения по `id`.
-- `fetch_offenders` — получение ФИО/ДР нарушителей по `event_id`.
 
 Пример проверки запросов через `psql` в тестовом окружении:
 ```bash
@@ -142,10 +140,10 @@ docker compose -f docker-compose.offline.yml exec -T portal-postgres \
 ```
 Внутри `psql` можно выполнить:
 ```sql
-SELECT e.id, e.date_detection, e.find_subdivision_unit_id
-FROM events e
-WHERE e.date_detection BETWEEN NOW() - INTERVAL '30 minutes' AND NOW() + INTERVAL '30 minutes'
-ORDER BY e.date_detection DESC
+SELECT e.id, e.detected_at, e.subdivision_id
+FROM portal_events e
+WHERE e.detected_at BETWEEN NOW() - INTERVAL '30 minutes' AND NOW() + INTERVAL '30 minutes'
+ORDER BY e.detected_at DESC
 LIMIT 5;
 ```
 
