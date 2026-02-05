@@ -202,6 +202,26 @@ def test_extract_date_then_time_with_dot():
     assert result.timestamp_has_time is True
 
 
+def test_extract_date_then_time_with_k_prefix():
+    service = ExtractService()
+    text = "02.02.2026 к 15:05 произошло событие."
+
+    result = service.extract(text)
+
+    assert result.timestamp == datetime(2026, 2, 2, 15, 5)
+    assert result.timestamp_has_time is True
+
+
+def test_extract_date_then_time_with_connector_window():
+    service = ExtractService()
+    text = "02.02.2026, в 15:05 произошло событие."
+
+    result = service.extract(text)
+
+    assert result.timestamp == datetime(2026, 2, 2, 15, 5)
+    assert result.timestamp_has_time is True
+
+
 def test_extract_time_then_date_with_prefix_still_works():
     service = ExtractService()
     text = "В 09.05 02.02.2026 зафиксировано событие."

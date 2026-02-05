@@ -57,10 +57,12 @@ class ExtractService:
         self._time_pattern = re.compile(r"\b(?:[01]?\d|2[0-3])[.:][0-5]\d\b")
         self._date_pattern = re.compile(r"\b\d{2}\.\d{2}\.\d{4}\b")
         self._time_then_date_pattern = re.compile(
-            rf"(?:\b[Вв]\s+)?(?P<time>{self._time_pattern.pattern})\s+(?P<date>{self._date_pattern.pattern})"
+            rf"(?:\b[Вв]\s+)?(?P<time>{self._time_pattern.pattern})\s*,?\s*(?P<date>{self._date_pattern.pattern})"
         )
         self._date_then_time_pattern = re.compile(
-            rf"(?P<date>{self._date_pattern.pattern})\s*(?:,?\s*[Вв]\s*)?(?P<time>{self._time_pattern.pattern})"
+            rf"(?P<date>{self._date_pattern.pattern})"
+            rf"(?P<between>[^\d]{{0,20}})"
+            rf"(?P<time>{self._time_pattern.pattern})"
         )
 
     def extract(self, text: str) -> ExtractedAttributes:
@@ -435,6 +437,9 @@ class ExtractService:
         candidates: list[dict[str, object]] = []
         for pattern in (self._time_then_date_pattern, self._date_then_time_pattern):
             for match in pattern.finditer(text):
+                between = match.groupdict().get("between")
+                if between is not None and not re.search(r"\b[ВвКк]\b", between):
+                    continue
                 date_text = match.group("date")
                 if self._is_birth_context(text, match.start("date"), match.end("date")):
                     continue

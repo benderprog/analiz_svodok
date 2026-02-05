@@ -13,8 +13,8 @@ from contextlib import contextmanager
 
 from sentence_transformers import SentenceTransformer, util
 
-from django.db.models import Count, Max
-from django.db.models.functions import Length, Trim
+from django.db.models import Count, Max, TextField
+from django.db.models.functions import Cast, Length, Trim
 from django.db.utils import OperationalError, ProgrammingError
 
 from apps.reference.models import EventType, EventTypePattern, SubdivisionRef
@@ -427,7 +427,7 @@ class EventTypeSemanticService:
         try:
             aggregates = self._pattern_queryset().aggregate(
                 count=Count("id"),
-                max_id=Max("id"),
+                max_id=Max(Cast("id", output_field=TextField())),
             )
         except (ProgrammingError, OperationalError) as exc:
             logger.warning(
