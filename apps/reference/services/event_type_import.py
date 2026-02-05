@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import importlib
+import importlib.util
 from typing import Iterable, TextIO
 
 from django.db import transaction
-from openpyxl import load_workbook
 
 from apps.reference.models import EventType, EventTypePattern
 
@@ -42,6 +43,12 @@ def _iter_rows(values: Iterable[tuple[object | None, ...]]) -> Iterable[tuple[st
 def import_event_types_from_xlsx(
     source: str | TextIO, *, dry_run: bool = False
 ) -> EventTypeImportReport:
+    if importlib.util.find_spec("openpyxl") is None:
+        raise RuntimeError(
+            "Для импорта XLSX требуется пакет openpyxl. "
+            "Установите зависимости: pip install -r requirements.txt"
+        )
+    load_workbook = importlib.import_module("openpyxl").load_workbook
     workbook = load_workbook(source, data_only=True)
     sheet = workbook.active
     report = EventTypeImportReport()

@@ -27,7 +27,10 @@ class Command(BaseCommand):
         if not path.exists():
             raise CommandError(f"Файл не найден: {path}")
 
-        report = import_event_types_from_xlsx(path, dry_run=options["dry_run"])
+        try:
+            report = import_event_types_from_xlsx(path, dry_run=options["dry_run"])
+        except RuntimeError as exc:
+            raise CommandError(str(exc)) from exc
         self.stdout.write(
             self.style.SUCCESS(
                 "Импорт завершен: типов создано "
