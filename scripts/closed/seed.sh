@@ -98,9 +98,35 @@ if [[ -d seed ]]; then
     docker compose -f "$COMPOSE_FILE" exec -T portal-postgres psql -v ON_ERROR_STOP=1 -U "$PORTAL_USER" -d "$PORTAL_DB" -f /seed/portal_schema.sql
   fi
 
-  if [[ -f seed/portal_data.sql ]]; then
+  seed_sql="seed/portal_data.sql"
+  docx_path=""
+  if [[ -f fixtures/test_svodka_semantic3.docx ]]; then
+    docx_path="fixtures/test_svodka_semantic3.docx"
+  else
+    for candidate in fixtures/*.docx; do
+      if [[ -f "$candidate" ]]; then
+        docx_path="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [[ -n "$docx_path" ]]; then
+    docx_basename="$(basename "$docx_path")"
+    container_docx="/data/fixtures/$docx_basename"
+    echo "Generating portal seed SQL from DOCX: $docx_path"
+    docker compose -f "$COMPOSE_FILE" run --rm \
+      -v "$PWD/seed:/seed" \
+      web \
+      python manage.py generate_portal_seed_from_docx \
+      --docx "$container_docx" \
+      --output "/seed/portal_data_generated.sql"
+    seed_sql="seed/portal_data_generated.sql"
+  fi
+
+  if [[ -f "$seed_sql" ]]; then
     echo "Seeding portal database data..."
-    docker compose -f "$COMPOSE_FILE" exec -T portal-postgres psql -v ON_ERROR_STOP=1 -U "$PORTAL_USER" -d "$PORTAL_DB" -f /seed/portal_data.sql
+    docker compose -f "$COMPOSE_FILE" exec -T portal-postgres psql -v ON_ERROR_STOP=1 -U "$PORTAL_USER" -d "$PORTAL_DB" -f "/$seed_sql"
   fi
 else
   echo "Seed directory not found; skipping portal seed SQL."
