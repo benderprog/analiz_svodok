@@ -16,7 +16,3 @@ queries:
     FROM offenders
     WHERE event_id = %(event_id)s
     ORDER BY last_name, first_name;
-  fetch_event_types: |
-    SELECT id, event_type_name
-    FROM events
-    WHERE id = ANY(%(event_ids)s);

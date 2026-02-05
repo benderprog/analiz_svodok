@@ -31,7 +31,6 @@ class EventSeed:
     subdivision_id: int
     date_detection: datetime
     offenders: list[OffenderSeed]
-    event_type_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,7 +55,6 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1990, 5, 5),
                 )
             ],
-            event_type_name="Выявление",
         ),
         EventSeed(
             id="22222222-2222-2222-2222-222222222222",
@@ -70,7 +68,6 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1985, 3, 12),
                 )
             ],
-            event_type_name="Проверка",
         ),
         EventSeed(
             id="33333333-3333-3333-3333-333333333333",
@@ -84,7 +81,6 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1992, 7, 1),
                 )
             ],
-            event_type_name="Выявление",
         ),
         EventSeed(
             id="44444444-4444-4444-4444-444444444444",
@@ -98,7 +94,6 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1978, 9, 9),
                 )
             ],
-            event_type_name="Задержание",
         ),
         EventSeed(
             id="55555555-5555-5555-5555-555555555555",
@@ -112,7 +107,6 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1995, 12, 30),
                 )
             ],
-            event_type_name="Выявление",
         ),
         EventSeed(
             id="66666666-6666-6666-6666-666666666666",
@@ -126,7 +120,6 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                     date_of_birth=date(1995, 12, 30),
                 )
             ],
-            event_type_name="Выявление",
         ),
     ]
 
@@ -180,7 +173,6 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
     extra_count = desired_total - len(base_events)
     extra_events: list[EventSeed] = []
     start_time = datetime(2024, 2, 1, 9, 0)
-    event_type_cycle = ["Выявление", "Проверка", "Задержание"]
     for index in range(extra_count):
         extra_events.append(
             EventSeed(
@@ -195,7 +187,6 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
                         date_of_birth=date(1990, 1, 1),
                     )
                 ],
-                event_type_name=event_type_cycle[index % len(event_type_cycle)],
             )
         )
 
