@@ -129,3 +129,8 @@ APP_ADMIN_PASSWORD = os.environ.get("APP_ADMIN_PASSWORD", "admin")
 PORTAL_QUERY_CONFIG_PATH = os.environ.get(
     "PORTAL_QUERY_CONFIG_PATH", "configs/portal_queries.yaml"
 )
+
+PORTAL_ADMIN_ENABLED = (
+    os.environ.get("PORTAL_ADMIN_ENABLED", "").lower() in {"1", "true", "yes"}
+    and DEBUG
+)
