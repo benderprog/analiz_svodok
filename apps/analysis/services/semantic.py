@@ -187,6 +187,12 @@ def generate_candidates(text: str) -> list[str]:
     return candidates
 
 
+def _embeddings_empty(embeddings: object) -> bool:
+    if hasattr(embeddings, "size"):
+        return embeddings.size == 0
+    return len(embeddings) == 0
+
+
 class SubdivisionSemanticService:
     _cached_subdivisions: list[SubdivisionRef] | None = None
     _cached_embeddings: object | None = None
@@ -342,7 +348,7 @@ class SubdivisionSemanticService:
         for normalized_candidate, subdivision in normalized_entries:
             if normalized_text == normalized_candidate:
                 return SemanticMatch(subdivision=subdivision, similarity=1.0)
-        if len(embeddings) == 0:
+        if _embeddings_empty(embeddings):
             return SemanticMatch(subdivision=None, similarity=0.0)
         filtered_entries = entries
         filtered_embeddings = embeddings
@@ -401,9 +407,13 @@ class EventTypeSemanticService:
 
     def __init__(self, model_name: str) -> None:
         self.model = load_semantic_model(model_name)
-        if self.__class__._cached_patterns is None:
+        self._ensure_cache()
+
+    def _ensure_cache(self) -> None:
+        cls = self.__class__
+        if cls._cached_patterns is None:
             try:
-                self.__class__._cached_patterns = list(
+                cls._cached_patterns = list(
                     EventTypePattern.objects.select_related("event_type")
                     .filter(is_active=True, event_type__is_active=True)
                 )
@@ -412,13 +422,13 @@ class EventTypeSemanticService:
                     "Event type patterns unavailable; skipping semantic patterns load.",
                     exc_info=exc,
                 )
-                self.__class__._cached_patterns = []
+                cls._cached_patterns = []
 
-        cached_patterns = self.__class__._cached_patterns
+        cached_patterns = cls._cached_patterns
         if (
-            self.__class__._cached_embeddings is None
-            or self.__class__._cached_embedding_patterns is None
-            or self.__class__._cached_embedding_texts is None
+            cls._cached_embeddings is None
+            or cls._cached_embedding_patterns is None
+            or cls._cached_embedding_texts is None
         ):
             texts: list[str] = []
             patterns: list[EventTypePattern] = []
@@ -428,22 +438,31 @@ class EventTypeSemanticService:
                 texts.append(pattern.pattern_text)
                 patterns.append(pattern)
             if texts:
-                self.__class__._cached_embeddings = self.model.encode(
+                cls._cached_embeddings = self.model.encode(
                     texts, normalize_embeddings=True
                 )
-                self.__class__._cached_embedding_patterns = patterns
-                self.__class__._cached_embedding_texts = texts
+                cls._cached_embedding_patterns = patterns
+                cls._cached_embedding_texts = texts
             else:
-                self.__class__._cached_embeddings = []
-                self.__class__._cached_embedding_patterns = []
-                self.__class__._cached_embedding_texts = []
+                cls._cached_embeddings = []
+                cls._cached_embedding_patterns = []
+                cls._cached_embedding_texts = []
 
-    def match(self, text: str) -> EventTypeSemanticMatch:
-        cached_patterns = self.__class__._cached_patterns or []
-        cached_embeddings = self.__class__._cached_embeddings or []
-        cached_embedding_patterns = self.__class__._cached_embedding_patterns or []
-        if not cached_patterns or len(cached_embeddings) == 0:
-            return EventTypeSemanticMatch(event_type=None, pattern=None, similarity=0.0)
+    def match(self, text: str) -> EventTypeSemanticMatch | None:
+        cls = self.__class__
+        cached_embeddings = cls._cached_embeddings
+        if cached_embeddings is None:
+            self._ensure_cache()
+            cached_embeddings = cls._cached_embeddings
+
+        cached_patterns = cls._cached_patterns
+        cached_embedding_patterns = cls._cached_embedding_patterns
+        if cached_patterns is None or cached_embedding_patterns is None:
+            return None
+        if not cached_patterns or cached_embeddings is None:
+            return None
+        if _embeddings_empty(cached_embeddings):
+            return None
         if not text:
             return EventTypeSemanticMatch(event_type=None, pattern=None, similarity=0.0)
 

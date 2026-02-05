@@ -88,7 +88,7 @@ class MatchService:
         match = self.event_type_service.match(text or "")
         detected = None
         detected_score = None
-        if match.event_type and match.similarity >= threshold:
+        if match and match.event_type and match.similarity >= threshold:
             detected = match.event_type.name
             detected_score = round(match.similarity, 4)
 
