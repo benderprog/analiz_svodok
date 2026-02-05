@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+import uuid
 
 import yaml
 from django.conf import settings
@@ -26,7 +27,7 @@ class OffenderSeed:
 
 @dataclass(frozen=True)
 class EventSeed:
-    id: int
+    id: str
     subdivision_id: int
     date_detection: datetime
     offenders: list[OffenderSeed]
@@ -43,7 +44,7 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
 
     base_events = [
         EventSeed(
-            id=2001,
+            id="11111111-1111-1111-1111-111111111111",
             subdivision_id=1101,
             date_detection=datetime(2024, 1, 10, 12, 0),
             offenders=[
@@ -56,7 +57,7 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=2002,
+            id="22222222-2222-2222-2222-222222222222",
             subdivision_id=1102,
             date_detection=datetime(2024, 1, 11, 9, 30),
             offenders=[
@@ -69,7 +70,7 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=2003,
+            id="33333333-3333-3333-3333-333333333333",
             subdivision_id=1202,
             date_detection=datetime(2024, 1, 12, 14, 20),
             offenders=[
@@ -82,7 +83,7 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=2004,
+            id="44444444-4444-4444-4444-444444444444",
             subdivision_id=1201,
             date_detection=datetime(2024, 1, 13, 16, 45),
             offenders=[
@@ -95,7 +96,7 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=2005,
+            id="55555555-5555-5555-5555-555555555555",
             subdivision_id=1301,
             date_detection=datetime(2024, 1, 14, 10, 15),
             offenders=[
@@ -108,7 +109,7 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
             ],
         ),
         EventSeed(
-            id=2006,
+            id="66666666-6666-6666-6666-666666666666",
             subdivision_id=1101,
             date_detection=datetime(2024, 1, 14, 10, 15),
             offenders=[
@@ -175,7 +176,7 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
     for index in range(extra_count):
         extra_events.append(
             EventSeed(
-                id=2000 + index,
+                id=_build_event_uuid(index),
                 subdivision_id=subdivisions[index % len(subdivisions)].id,
                 date_detection=start_time + timedelta(minutes=index * 5),
                 offenders=[
@@ -190,6 +191,10 @@ def build_local_portal_seed(scale: int = 10) -> tuple[list[SubdivisionSeed], lis
         )
 
     return subdivisions, base_events + extra_events, docx_events
+
+
+def _build_event_uuid(index: int) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"portal-event-{index}"))
 
 
 def _load_divisions_from_yaml() -> list[SubdivisionSeed]:

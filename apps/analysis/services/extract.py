@@ -34,21 +34,21 @@ class ExtractService:
         self.tagger = NewsNERTagger(self.embedding)
         self.date_extractor = DatesExtractor(self.morph_vocab)
         self.name_extractor = NamesExtractor(self.morph_vocab)
-        self._name_pattern = re.compile(
-            r"\b[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){1,2}\b"
+        self._birth_date_context_pattern = re.compile(
+            r"[\(,]?\s*(?P<date>\d{2}[.\-]\d{2}[.\-]\d{4})\s*[\),]?",
         )
-        self._birth_date_pattern = re.compile(
-            r"(?P<date>\d{2}\.\d{2}\.\d{4})\s*(?:г\.?р\.?|род\.?)",
-            re.IGNORECASE,
+        self._birth_year_pattern = re.compile(r"\b(?P<year>\d{4})\b")
+        self._initials_pattern = re.compile(
+            r"\b(?P<last>[А-ЯЁ][а-яё]+)\s*(?P<first>[А-ЯЁ])\.?\s*(?P<middle>[А-ЯЁ])\.?\b"
         )
-        self._birth_date_parentheses_pattern = re.compile(
-            r"\(\s*(?P<date>\d{2}\.\d{2}\.\d{4})\s*(?:г\.?р\.?|род\.?)?\s*\)",
-            re.IGNORECASE,
-        )
-        self._birth_year_pattern = re.compile(
-            r"(?P<year>\d{4})\s*(?:г\.?р\.?|род\.?)",
-            re.IGNORECASE,
-        )
+        self._year_markers = {
+            "г",
+            "гр",
+            "год",
+            "года",
+            "годарождения",
+            "годрождения",
+        }
         self._time_pattern = re.compile(r"\b(?:[01]?\d|2[0-3])[.:][0-5]\d\b")
         self._date_pattern = re.compile(r"\b\d{2}\.\d{2}\.\d{4}\b")
         self._time_then_date_pattern = re.compile(
@@ -62,7 +62,7 @@ class ExtractService:
         doc = Doc(text)
         doc.segment(self.segmenter)
         doc.tag_ner(self.tagger)
-        offenders = self._extract_offenders(text)
+        offenders = self._extract_offenders(text, doc)
         subdivision_text = self._extract_subdivision(doc)
         timestamp, timestamp_has_time, timestamp_text = self._extract_timestamp(text)
 
@@ -95,28 +95,20 @@ class ExtractService:
 
         return None, False, None
 
-    def _extract_offenders(self, text: str) -> list[Offender]:
+    def _extract_offenders(self, text: str, doc: Doc) -> list[Offender]:
         offenders: list[Offender] = []
-        name_matches = list(self._name_pattern.finditer(text))
-        birth_date_matches = self._extract_birth_date_matches(text)
-        birth_year_matches = self._extract_birth_year_matches(text)
-        for index, match in enumerate(name_matches):
-            raw = match.group(0)
-            parts = raw.split()
-            if len(parts) not in (2, 3):
+        per_spans = sorted([span for span in doc.spans if span.type == "PER"], key=lambda s: s.start)
+        for index, span in enumerate(per_spans):
+            name_match = self._match_name(span.text)
+            if not name_match:
                 continue
-            last_name, first_name = parts[0], parts[1]
-            middle_name = parts[2] if len(parts) == 3 else None
-            name_end = match.end()
+            last_name, first_name, middle_name, start, end, raw_name = name_match
+            name_end = span.start + end
             next_name_start = (
-                name_matches[index + 1].start() if index + 1 < len(name_matches) else len(text) + 1
+                per_spans[index + 1].start if index + 1 < len(per_spans) else len(text)
             )
-            birth_date = self._birth_date_for_name(name_end, next_name_start, birth_date_matches)
-            birth_year = None
-            if birth_date is None:
-                birth_year = self._birth_year_for_name(
-                    name_end, next_name_start, birth_year_matches
-                )
+            context = text[name_end: min(next_name_start, name_end + 80)]
+            birth_date, birth_year = self._extract_birth_from_context(context)
             offenders.append(
                 Offender(
                     first_name=first_name,
@@ -124,7 +116,53 @@ class ExtractService:
                     last_name=last_name,
                     date_of_birth=birth_date,
                     birth_year=birth_year,
-                    raw=raw,
+                    raw=raw_name,
+                )
+            )
+
+        offenders.extend(self._extract_initials_fallback(text, per_spans))
+        return offenders
+
+    def _match_name(
+        self, text: str
+    ) -> tuple[str, str | None, str | None, int, int, str] | None:
+        matches = list(self.name_extractor(text))
+        if matches:
+            match = matches[0]
+            fact = match.fact
+            if fact.last:
+                start, end, raw = self._match_to_span(text, match)
+                return fact.last, fact.first, fact.middle, start, end, raw
+        parts = [part for part in text.split() if part]
+        if len(parts) >= 2:
+            last_name = parts[0]
+            first_name = parts[1]
+            middle_name = parts[2] if len(parts) > 2 else None
+            raw = " ".join(parts[:3]) if middle_name else " ".join(parts[:2])
+            return last_name, first_name, middle_name, 0, len(raw), raw
+        return None
+
+    def _extract_initials_fallback(
+        self, text: str, per_spans: list
+    ) -> list[Offender]:
+        offenders: list[Offender] = []
+        for match in self._initials_pattern.finditer(text):
+            if any(self._overlaps(match.start(), match.end(), (span.start, span.stop)) for span in per_spans):
+                continue
+            last_name = match.group("last")
+            first_initial = match.group("first")
+            middle_initial = match.group("middle")
+            name_end = match.end()
+            context = text[name_end: min(len(text), name_end + 80)]
+            birth_date, birth_year = self._extract_birth_from_context(context)
+            offenders.append(
+                Offender(
+                    first_name=first_initial,
+                    middle_name=middle_initial,
+                    last_name=last_name,
+                    date_of_birth=birth_date,
+                    birth_year=birth_year,
+                    raw=match.group(0),
                 )
             )
         return offenders
@@ -156,18 +194,6 @@ class ExtractService:
             return start, end, text[start:end]
 
         return -1, -1, str(match)
-
-    def _nearest_birth_date(self, start: int, stop: int, matches) -> object | None:
-        closest = None
-        closest_distance = None
-        for match in matches:
-            distance = min(abs(match.start - stop), abs(match.stop - start))
-            if distance > 40:
-                continue
-            if closest_distance is None or distance < closest_distance:
-                closest = match
-                closest_distance = distance
-        return closest
 
     def _birth_date_from_fact(self, fact) -> tuple[date | None, int | None]:
         if fact is None or not getattr(fact, "year", None):
@@ -252,42 +278,66 @@ class ExtractService:
         candidate = parts[0].strip(" ,:\t\n")
         return candidate or None
 
-    def _extract_birth_date_matches(self, text: str) -> list[dict[str, object]]:
-        matches: list[dict[str, object]] = []
-        for pattern in (self._birth_date_pattern, self._birth_date_parentheses_pattern):
-            for match in pattern.finditer(text):
-                try:
-                    parsed = datetime.strptime(match.group("date"), "%d.%m.%Y").date()
-                except ValueError:
-                    continue
-                matches.append({"start": match.start(), "end": match.end(), "date": parsed})
-        matches.sort(key=lambda item: item["start"])
-        return matches
+    def _extract_birth_from_context(self, context: str) -> tuple[date | None, int | None]:
+        birth_date = None
+        for match in self._birth_date_context_pattern.finditer(context):
+            date_text = match.group("date").replace("-", ".")
+            try:
+                birth_date = datetime.strptime(date_text, "%d.%m.%Y").date()
+                break
+            except ValueError:
+                continue
+        if birth_date:
+            return birth_date, None
 
-    def _extract_birth_year_matches(self, text: str) -> list[dict[str, object]]:
-        matches: list[dict[str, object]] = []
-        for match in self._birth_year_pattern.finditer(text):
-            matches.append(
-                {"start": match.start(), "end": match.end(), "year": int(match.group("year"))}
+        tokens = self._tokenize_context(context)
+        for match in self._birth_year_pattern.finditer(context):
+            year = int(match.group("year"))
+            token_index = self._token_index(tokens, match.start(), match.end())
+            if token_index is None:
+                continue
+            if self._has_year_marker(tokens, token_index):
+                return None, year
+        return None, None
+
+    def _tokenize_context(self, text: str) -> list[dict[str, object]]:
+        tokens: list[dict[str, object]] = []
+        for match in re.finditer(r"[0-9A-Za-zА-Яа-яЁё\.]+", text):
+            token = match.group(0)
+            tokens.append(
+                {
+                    "start": match.start(),
+                    "end": match.end(),
+                    "text": token,
+                    "norm": self._normalize_token(token),
+                }
             )
-        matches.sort(key=lambda item: item["start"])
-        return matches
+        return tokens
 
-    def _birth_date_for_name(
-        self, name_end: int, next_name_start: int, matches: list[dict[str, object]]
-    ) -> date | None:
-        for match in matches:
-            if name_end < match["start"] < next_name_start:
-                return match["date"]
-        return None
-
-    def _birth_year_for_name(
-        self, name_end: int, next_name_start: int, matches: list[dict[str, object]]
+    def _token_index(
+        self, tokens: list[dict[str, object]], start: int, end: int
     ) -> int | None:
-        for match in matches:
-            if name_end < match["start"] < next_name_start:
-                return match["year"]
+        for idx, token in enumerate(tokens):
+            if token["start"] <= start < token["end"] or token["start"] < end <= token["end"]:
+                return idx
         return None
+
+    def _normalize_token(self, token: str) -> str:
+        return token.lower().replace(".", "")
+
+    def _has_year_marker(self, tokens: list[dict[str, object]], index: int) -> bool:
+        start = max(0, index - 2)
+        end = min(len(tokens), index + 3)
+        window = tokens[start:end]
+        norms = [token["norm"] for token in window]
+        if any(norm in self._year_markers for norm in norms):
+            return True
+        for idx in range(len(window) - 1):
+            if window[idx]["norm"] == "г" and window[idx + 1]["norm"] == "р":
+                return True
+        if "года" in norms and "рождения" in norms:
+            return True
+        return False
 
     def _extract_datetime_candidates(self, text: str) -> list[dict[str, object]]:
         candidates: list[dict[str, object]] = []
@@ -326,4 +376,10 @@ class ExtractService:
         window_start = max(0, start - 10)
         window_end = min(len(text), end + 10)
         window = text[window_start:window_end]
-        return bool(re.search(r"(г\.?р\.?|род\.?)", window, re.IGNORECASE))
+        return bool(
+            re.search(
+                r"(г\.?\s*р\.?|род\.?|года рождения|год рождения)",
+                window,
+                re.IGNORECASE,
+            )
+        )
