@@ -57,3 +57,34 @@ def test_event_type_semantic_match_smoke(db, monkeypatch):
     threshold = 0.99
     detected = weak_match.event_type if weak_match.similarity >= threshold else None
     assert detected is None
+
+
+def test_event_type_match_returns_none_with_empty_patterns(db, monkeypatch):
+    monkeypatch.setattr(semantic, "load_semantic_model", lambda _: DummyModel())
+    monkeypatch.setattr(semantic.util, "cos_sim", _dummy_cos_sim)
+    EventTypeSemanticService._cached_patterns = None
+    EventTypeSemanticService._cached_embeddings = None
+    EventTypeSemanticService._cached_embedding_patterns = None
+    EventTypeSemanticService._cached_embedding_texts = None
+
+    service = EventTypeSemanticService("dummy")
+
+    match = service.match("текст без паттернов")
+    assert match is None
+
+
+def test_event_type_match_with_patterns_does_not_crash(db, monkeypatch):
+    monkeypatch.setattr(semantic, "load_semantic_model", lambda _: DummyModel())
+    monkeypatch.setattr(semantic.util, "cos_sim", _dummy_cos_sim)
+    EventTypeSemanticService._cached_patterns = None
+    EventTypeSemanticService._cached_embeddings = None
+    EventTypeSemanticService._cached_embedding_patterns = None
+    EventTypeSemanticService._cached_embedding_texts = None
+
+    event_type = EventType.objects.create(name="Тип C")
+    EventTypePattern.objects.create(event_type=event_type, pattern_text="пример C")
+
+    service = EventTypeSemanticService("dummy")
+
+    match = service.match("пример C")
+    assert match is not None
